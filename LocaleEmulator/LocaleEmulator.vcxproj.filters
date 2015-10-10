@@ -1,0 +1,62 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Hooks">
+      <UniqueIdentifier>{c9c6e9bc-e457-4a25-9d6b-7fb5f1e93a33}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Utility">
+      <UniqueIdentifier>{3db9aec5-271e-4989-a145-95b045c55e10}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="Hooks\Gdi32Hook.cpp">
+      <Filter>Hooks</Filter>
+    </ClCompile>
+    <ClCompile Include="Hooks\Kernel32Hook.cpp">
+      <Filter>Hooks</Filter>
+    </ClCompile>
+    <ClCompile Include="Hooks\NtdllHook.cpp">
+      <Filter>Hooks</Filter>
+    </ClCompile>
+    <ClCompile Include="Hooks\User32Hook.cpp">
+      <Filter>Hooks</Filter>
+    </ClCompile>
+    <ClCompile Include="Utility\Utility.cpp">
+      <Filter>Utility</Filter>
+    </ClCompile>
+    <ClCompile Include="LocaleEmulator.cpp" />
+    <ClCompile Include="stdafx.cpp" />
+    <ClCompile Include="ml.cpp" />
+    <ClCompile Include="HandleTable.cpp" />
+    <ClCompile Include="HookPort.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="Hooks\Gdi32Hook.h">
+      <Filter>Hooks</Filter>
+    </ClInclude>
+    <ClInclude Include="Hooks\MessageTable.h">
+      <Filter>Hooks</Filter>
+    </ClInclude>
+    <ClInclude Include="Hooks\NtdllHook.h">
+      <Filter>Hooks</Filter>
+    </ClInclude>
+    <ClInclude Include="Hooks\User32Hook.h">
+      <Filter>Hooks</Filter>
+    </ClInclude>
+    <ClInclude Include="Utility\Utility.h">
+      <Filter>Utility</Filter>
+    </ClInclude>
+    <ClInclude Include="LocaleEmulator.h" />
+    <ClInclude Include="stdafx.h" />
+    <ClInclude Include="ml.h" />
+    <ClInclude Include="HookPort.h" />
+    <ClInclude Include="MyLibrary.h" />
+    <ClInclude Include="SectionProtector.h" />
+    <ClInclude Include="HandleTable.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Hooks\genmsgtbl.py">
+      <Filter>Hooks</Filter>
+    </None>
+  </ItemGroup>
+</Project>
