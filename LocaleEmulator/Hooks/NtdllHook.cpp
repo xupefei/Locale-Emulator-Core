@@ -199,7 +199,7 @@ LeNtQuerySystemInformation(
             *((PRTL_TIME_ZONE_INFORMATION)SystemInformation) = GlobalData->GetLeb()->Timezone;
 
             if (ReturnLength != nullptr)
-                *ReturnLength = SystemInformationLength;
+                *ReturnLength = sizeof(GlobalData->GetLeb()->Timezone);
 
             HpSetFilterAction(BlockSystemCall);
 

@@ -239,8 +239,9 @@ inline VOID InitDefaultLeb(PLEB Leb)
 
     CopyStruct(Leb->DefaultFaceName, FaceName, sizeof(FaceName));
 
+    NtQuerySystemInformation(SystemCurrentTimeZoneInformation, &Leb->Timezone, sizeof(Leb->Timezone), nullptr);
+
     Leb->Timezone.Bias = -540;
-    Leb->Timezone.DaylightBias = 0;
     CopyStruct(Leb->Timezone.StandardName, StandardName, sizeof(StandardName));
     CopyStruct(Leb->Timezone.DaylightName, DaylightName, sizeof(DaylightName));
 }
