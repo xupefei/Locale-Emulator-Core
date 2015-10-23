@@ -250,32 +250,29 @@ GetNameRecordFromNameTable(
     }
 
     NameRecordUser = NameRecordUser == nullptr ? NameRecordEn : NameRecordUser;
+    if (NameRecordUser == nullptr)
+        return STATUS_NOT_FOUND;
 
-    if (NameRecordUser != nullptr)
+    PWSTR       FaceName, Buffer;
+    ULONG_PTR   Offset, Length;
+
+    Offset = StorageOffset + Bswap(NameRecordUser->StringOffset);
+    Length = Bswap(NameRecordUser->StringLength);
+    FaceName = (PWSTR)PtrAdd(TableBuffer, Offset);
+
+    Buffer = Name->Buffer;
+    Length = (USHORT)ML_MIN(Length, Name->MaximumLength);
+    Name->Length = Length;
+
+    for (ULONG_PTR Index = 0; Index != Length / sizeof(WCHAR); ++Index)
     {
-        PWSTR     FaceName, Buffer;
-        ULONG_PTR Offset, Length;
-
-        Offset = StorageOffset + Bswap(NameRecordUser->StringOffset);
-        Length = Bswap(NameRecordUser->StringLength);
-        FaceName = (PWSTR)PtrAdd(TableBuffer, Offset);
-
-        Buffer = Name->Buffer;
-        Length = (USHORT)ML_MIN(Length, Name->MaximumLength);
-        Name->Length = Length;
-
-        for (ULONG_PTR Index = 0; Index != Length / sizeof(WCHAR); ++Index)
-        {
-            Buffer[Index] = Bswap(FaceName[Index]);
-        }
-
-        if (Length < Name->MaximumLength)
-            *PtrAdd(Buffer, Length) = 0;
-
-        return STATUS_SUCCESS;
+        Buffer[Index] = Bswap(FaceName[Index]);
     }
 
-    return STATUS_NOT_FOUND;
+    if (Length < Name->MaximumLength)
+        *PtrAdd(Buffer, Length) = 0;
+
+    return STATUS_SUCCESS;
 }
 
 NTSTATUS LeGlobalData::AdjustFontDataInternal(PADJUST_FONT_DATA AdjustData)
@@ -311,7 +308,12 @@ NTSTATUS LeGlobalData::AdjustFontDataInternal(PADJUST_FONT_DATA AdjustData)
                 &FaceName
             );
 
-    if (NT_FAILED(Status) || wcsicmp(FaceName.Buffer, AdjustData->EnumLogFontEx->elfLogFont.lfFaceName) != 0)
+    PCWSTR lfFaceName = AdjustData->EnumLogFontEx->elfLogFont.lfFaceName;
+    BOOL Vertical = lfFaceName[0] == '@';
+
+    //PrintConsole(L"%s\n%wZ\n\n", lfFaceName + Vertical, &FaceName);
+
+    if (NT_FAILED(Status) || wcsicmp(FaceName.Buffer, lfFaceName + Vertical) != 0)
         return STATUS_CONTEXT_MISMATCH;
 
     Status = this->GetNameRecordFromNameTable(
@@ -322,7 +324,7 @@ NTSTATUS LeGlobalData::AdjustFontDataInternal(PADJUST_FONT_DATA AdjustData)
                 &FaceName
             );
 
-    Status = NT_SUCCESS(Status) ? 
+    Status = NT_SUCCESS(Status) ?
                 this->GetNameRecordFromNameTable(
                     Table,
                     TableSize,
@@ -380,7 +382,7 @@ NTSTATUS LeGlobalData::AdjustFontData(HDC DC, LPENUMLOGFONTEXW EnumLogFontEx, PT
 
         if (TextMetric != nullptr)
         {
-            if (GetTextMetricsA(DC, &TextMetric->TextMetricA) && 
+            if (GetTextMetricsA(DC, &TextMetric->TextMetricA) &&
                 GetTextMetricsW(DC, &TextMetric->TextMetricW))
             {
                 TextMetric->Filled = TRUE;
@@ -480,10 +482,13 @@ INT NTAPI LeEnumFontCallbackW(CONST LOGFONTW *lf, CONST TEXTMETRICW *TextMetricW
         if (EnumParam->Charset != DEFAULT_CHARSET)
             break;
 
-        if (lf->lfFaceName != ANSI_CHARSET && lf->lfCharSet == EnumParam->GlobalData->GetLePeb()->OriginalCharset)
+        if (lf->lfCharSet == ANSI_CHARSET)
             break;
 
         ((LPLOGFONTW)lf)->lfCharSet = EnumParam->GlobalData->GetLeb()->DefaultCharset;
+
+        //if (lf->lfCharSet == EnumParam->GlobalData->GetLePeb()->OriginalCharset)
+        //    break;
     }
 
     //if (wcscmp(lf->lfFaceName, L"MS Gothic") == 0) _asm int 4;
