@@ -9931,9 +9931,9 @@ void*           _ReturnAddress();
 
 IF_NOT_EXIST(__stosb)
 {
-	void            __cdecl __stosb(void* Dest, unsigned char Data, size_t Count);
-	void            __cdecl __stosw(void* Dest, unsigned short Data, size_t Count);
-	void            __cdecl __stosd(void* Dest, unsigned long Data, size_t Count);
+    void            __cdecl __stosb(void* Dest, unsigned char Data, size_t Count);
+    void            __cdecl __stosw(void* Dest, unsigned short Data, size_t Count);
+    void            __cdecl __stosd(void* Dest, unsigned long Data, size_t Count);
 }
 
 IF_NOT_EXIST(__movsb)
@@ -22036,6 +22036,7 @@ WCharToUnicodeString64(
 
 #define EMPTYUS         WCharToUnicodeString((PWSTR)NULL, 0)
 #define USTR(_str)      WCharToUnicodeString(_str, CONST_STRLEN((_str)))
+#define IUSTR(x)        {CONST_STRLEN(x) * sizeof(x[0]), CONST_STRLEN(x) * sizeof(x[0]), x}
 #define VUSTR(_str)      ((*(volatile UNICODE_STRING *)&WCharToUnicodeString(_str, CONST_STRLEN((_str)))))
 #define PUSTR(_str)     (PUNICODE_STRING)&VUSTR(_str)
 #define USTR64(_str)    WCharToUnicodeString64(_str, CONST_STRLEN((_str)))
@@ -28888,15 +28889,15 @@ public:
         ULONG_PTR   Length;
         AnsiString  Array;
 
-        if (Encoding == CP_THREAD_ACP)
-        {
-            WCHAR Buffer[8];
-            GetLocaleInfoW(CurrentTeb()->CurrentLocale, LOCALE_IDEFAULTANSICODEPAGE, Buffer, countof(Buffer));
+        //if (Encoding == CP_THREAD_ACP)
+        //{
+        //    WCHAR Buffer[8];
+        //    GetLocaleInfoW(CurrentTeb()->CurrentLocale, LOCALE_IDEFAULTANSICODEPAGE, Buffer, countof(Buffer));
 
-            Encoding = StringToInt32W(Buffer);
-            if (Encoding == CurrentPeb()->AnsiCodePageData[1])
-                Encoding = CP_ACP;
-        }
+        //    Encoding = StringToInt32W(Buffer);
+        //    if (Encoding == CurrentPeb()->AnsiCodePageData[1])
+        //        Encoding = CP_ACP;
+        //}
 
         if (Encoding == CP_UTF16_LE)
         {
@@ -29437,6 +29438,255 @@ typedef String::ByteArray ByteArray;
 #pragma warning(pop)
 
 #endif // _MLSTRING_H_252d9413_55ca_4d44_976f_c0dcecd5afd4_
+#ifndef _HASHTABLE_H_f92cdc12_70f0_4679_aa3d_d9e1a22117ed_
+#define _HASHTABLE_H_f92cdc12_70f0_4679_aa3d_d9e1a22117ed_
+
+
+typedef struct
+{
+    ULONG           Index;
+    ULARGE_INTEGER  Name;
+
+} HASH_VALUE;
+
+template<class ELEMENT_TYPE, ULONG_PTR TABLE_LENGTH = 1021>
+class HashTableT
+{
+    typedef ELEMENT_TYPE *PELEMENT_TYPE;
+
+    typedef struct
+    {
+        ULARGE_INTEGER  Name;
+        ELEMENT_TYPE    Element;
+
+    } HASH_TABLE_ITEM, *PHASH_TABLE_ITEM;
+
+    typedef ml::GrowableArray<HASH_TABLE_ITEM> HashTableEntry;
+
+public:
+    NoInline HashTableT()
+    {
+        this->Entries = nullptr;
+        this->CalcTable = nullptr;
+    }
+
+    NoInline ~HashTableT()
+    {
+        SafeDeleteT(this->CalcTable);
+        SafeDeleteArrayT(this->Entries);
+    }
+
+    NoInline NTSTATUS Initialize()
+    {
+        ml::MlInitialize();
+
+        this->CalcTable = new ULONG[this->CalcTableSize];
+        if (this->CalcTable == nullptr)
+            return STATUS_NO_MEMORY;
+
+        this->Entries = new HashTableEntry[this->TableSize];
+
+        if (this->Entries == nullptr)
+            return STATUS_NO_MEMORY;
+
+        ULONG Seed = 0x00100001;
+
+        for (int index1 = 0; index1 != 0x100; index1++)
+        {
+            for(int index2 = index1, i = 5; i != 0; index2 += 0x100, --i)
+            {
+                ULONG temp1, temp2;
+
+                Seed = (Seed * 125 + 3) % 0x2AAAAB;
+                temp1 = (Seed & 0xFFFF) << 16;
+                Seed = (Seed * 125 + 3) % 0x2AAAAB;
+                temp2 = (Seed & 0xFFFF);
+                this->CalcTable[index2] = temp1 | temp2;
+            }
+        }
+
+        return STATUS_SUCCESS;
+    }
+
+    NoInline HASH_VALUE HashString(PCSTR Ansi, ULONG_PTR Length = -1)
+    {
+        PSTR Local;
+
+        if (Length == -1)
+            Length = StrLengthA(Ansi);
+
+        Local = (PSTR)AllocStack(Length);
+        CopyMemory(Local, Ansi, Length);
+        StringUpperA(Local, Length);
+
+        return HashData(Local, Length);
+    }
+
+    NoInline HASH_VALUE HashString(PCWSTR Unicode, ULONG_PTR Length = -1)
+    {
+        PWSTR Local;
+
+        if (Length == -1)
+            Length = StrLengthW(Unicode);
+
+        Length *= sizeof(Unicode[0]);
+
+        Local = (PWSTR)AllocStack(Length);
+        CopyMemory(Local, Unicode, Length);
+        StringUpperW(Local, Length / sizeof(Unicode[0]));
+
+        return HashData(Local, Length);
+    }
+
+    ForceInline VOID Calc(ULONG b, ULONG& v1, ULONG& v2, ULONG t)
+    {
+        v1 = this->CalcTable[(t << 8) + b] ^ (v1 + v2);
+        v2 = b + v1 + v2 + (v2 << 5) + 3;
+    }
+
+    NoInline HASH_VALUE HashData(PVOID Bytes, ULONG_PTR Length)
+    {
+        ULONG       Seed1, Seed2, Seed3, b;
+        PBYTE       Data;
+        HASH_VALUE  Hash;
+
+        Data = (PBYTE)Bytes;
+
+        Hash.Index          = 0x7FED7FED;
+        Hash.Name.LowPart   = 0x7FED7FED;
+        Hash.Name.HighPart  = 0x7FED7FED;
+
+        Seed1 = 0xEEEEEEEE;
+        Seed2 = 0xEEEEEEEE;
+        Seed3 = 0xEEEEEEEE;
+        for (; Length; Length--)
+        {
+            b = *Data++;
+
+            Calc(b, Hash.Index, Seed1, 0);
+            Calc(b, Hash.Name.LowPart, Seed2, 1);
+            Calc(b, Hash.Name.HighPart, Seed3, 2);
+        }
+
+        return Hash;
+    }
+
+    template<class STRING_TYPE>
+    NoInline ELEMENT_TYPE& Add(STRING_TYPE StringKey, const ELEMENT_TYPE& Element)
+    {
+        return AddElement(HashString(StringKey), Element).Element;
+    }
+
+    NoInline ELEMENT_TYPE& Add(PVOID Bytes, ULONG_PTR Length, const ELEMENT_TYPE& Element)
+    {
+        return AddElement(HashData(Bytes, Length), Element).Element;
+    }
+
+    template<class STRING_TYPE>
+    NoInline PELEMENT_TYPE Get(STRING_TYPE StringKey, ULONG_PTR Length = -1)
+    {
+        return LookupElement(HashString(StringKey, Length));
+    }
+
+    NoInline PELEMENT_TYPE Get(PVOID Key, ULONG_PTR Length)
+    {
+        return LookupElement(HashString(Key, Length));
+    }
+
+    template<class STRING_TYPE>
+    NoInline BOOL Contains(STRING_TYPE StringKey)
+    {
+        return Get(StringKey) != nullptr;
+    }
+
+    NoInline BOOL Contains(PVOID Bytes, ULONG_PTR Length)
+    {
+        return Get(Bytes, Length) != nullptr;
+    }
+
+    template<class STRING_TYPE>
+    NoInline ELEMENT_TYPE& Remove(STRING_TYPE StringKey, const ELEMENT_TYPE& Element)
+    {
+        return RemoveElement(HashString(StringKey));
+    }
+
+    NoInline ELEMENT_TYPE& Remove(PVOID Bytes, ULONG_PTR Length, const ELEMENT_TYPE& Element)
+    {
+        return RemoveElement(HashData(Bytes, Length));
+    }
+
+protected:
+    NoInline HASH_TABLE_ITEM& AddElement(const HASH_VALUE& Hash, const ELEMENT_TYPE& Element)
+    {
+        auto Item = LookupItem(Hash);
+
+        if (Item != nullptr)
+        {
+            Item->Element = Element;
+            return *Item;
+        }
+
+        HashTableEntry& Entry = LookupEntry(Hash);
+
+        Entry.Add({Hash.Name, Element});
+
+        return Entry.GetLast();
+    }
+
+    NoInline VOID RemoveElement(const HASH_VALUE& Hash)
+    {
+        PHASH_TABLE_ITEM    Item;
+        ULONG_PTR           Index;
+        HashTableEntry&     Entry = LookupEntry(Hash);
+
+        Index = 0;
+        FOR_EACH_VEC(Item, Entry)
+        {
+            if (Item->Name.QuadPart == Hash.Name.QuadPart)
+            {
+                Entry.Remove(Index);
+                break;
+            }
+
+            ++Index;
+        }
+    }
+
+    NoInline PELEMENT_TYPE LookupElement(const HASH_VALUE& Hash)
+    {
+        auto Item = this->LookupItem(Hash);
+        return Item == nullptr ? nullptr : &Item->Element;
+    }
+
+    NoInline PHASH_TABLE_ITEM LookupItem(const HASH_VALUE& Hash)
+    {
+        PHASH_TABLE_ITEM Item;
+        HashTableEntry& Entry = LookupEntry(Hash);
+
+        FOR_EACH_VEC(Item, Entry)
+        {
+            if (Item->Name.QuadPart == Hash.Name.QuadPart)
+                return Item;
+        }
+
+        return nullptr;
+    }
+
+    ForceInline HashTableEntry& LookupEntry(const HASH_VALUE& Hash)
+    {
+        return this->Entries[Hash.Index % this->TableSize];
+    }
+
+protected:
+
+    HashTableEntry* Entries;
+    PULONG CalcTable;
+
+    static const ULONG_PTR CalcTableSize = 0x500;
+    static const ULONG_PTR TableSize = TABLE_LENGTH;
+};
+
+#endif // _HASHTABLE_H_f92cdc12_70f0_4679_aa3d_d9e1a22117ed_
 #ifndef _MLNATIVEAPI_H_c2e39676_dc3c_40cd_a77e_e9a22bb61ddc_
 #define _MLNATIVEAPI_H_c2e39676_dc3c_40cd_a77e_e9a22bb61ddc_
 

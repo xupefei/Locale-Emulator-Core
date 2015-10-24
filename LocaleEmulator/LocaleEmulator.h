@@ -394,6 +394,7 @@ protected:
     LEPEB LePeb;
 
     ml::GrowableArray<REGISTRY_REDIRECTION_ENTRY> RegistryRedirectionEntry;
+    ml::HashTableT<TEXT_METRIC_INTERNAL> TextMetricCache;
 
     PVOID CodePageMapView;
     ULONG_PTR AnsiCodePageOffset, OemCodePageOffset, UnicodeCaseTableOffset;
@@ -698,6 +699,9 @@ public:
 
     VOID GetTextMetricsAFromLogFont(PTEXTMETRICA TextMetricA, CONST LOGFONTW *LogFont);
     VOID GetTextMetricsWFromLogFont(PTEXTMETRICW TextMetricW, CONST LOGFONTW *LogFont);
+
+    PTEXT_METRIC_INTERNAL GetTextMetricFromCache(LPENUMLOGFONTEXW LogFont);
+    VOID AddTextMetricToCache(LPENUMLOGFONTEXW LogFont, PTEXT_METRIC_INTERNAL TextMetric);
 
     HGDIOBJ GetStockObject(LONG Object)
     {

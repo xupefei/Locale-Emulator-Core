@@ -188,6 +188,9 @@ NTSTATUS LeGlobalData::Initialize()
         if (IsLoader)
             break;
 
+        Status = this->TextMetricCache.Initialize();
+        FAIL_RETURN(Status);
+
         PVOID           NlsBaseAddress;
         LCID            DefaultLocaleID;
         LARGE_INTEGER   DefaultCasingTableSize;
