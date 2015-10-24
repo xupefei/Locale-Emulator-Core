@@ -115,9 +115,7 @@ PTEXT_METRIC_INTERNAL LeGlobalData::GetTextMetricFromCache(LPENUMLOGFONTEXW LogF
 
     swprintf(buf, L"%s@%d", LogFont->elfFullName, LogFont->elfLogFont.lfCharSet);
 
-    auto r = this->TextMetricCache.Get(buf);
-
-    return r;
+    return this->TextMetricCache.Get(buf);
 }
 
 VOID LeGlobalData::AddTextMetricToCache(LPENUMLOGFONTEXW LogFont, PTEXT_METRIC_INTERNAL TextMetric)
@@ -125,8 +123,6 @@ VOID LeGlobalData::AddTextMetricToCache(LPENUMLOGFONTEXW LogFont, PTEXT_METRIC_I
     WCHAR buf[LF_FULLFACESIZE * 2];
 
     swprintf(buf, L"%s@%d", LogFont->elfFullName, LogFont->elfLogFont.lfCharSet);
-
-    //PrintConsole(L"add %s\n", buf);
 
     this->TextMetricCache.Add(buf, *TextMetric);
 }
@@ -532,6 +528,9 @@ INT NTAPI LeEnumFontCallbackW(CONST LOGFONTW *lf, CONST TEXTMETRICW *TextMetricW
         {
             if (CachedTextMetric->VerifyMagic() == FALSE)
                 return TRUE;
+
+            if (CachedTextMetric->Filled == FALSE)
+                break;
 
             TextMetric.TextMetricA = CachedTextMetric->TextMetricA;
             TextMetric.TextMetricW = CachedTextMetric->TextMetricW;
