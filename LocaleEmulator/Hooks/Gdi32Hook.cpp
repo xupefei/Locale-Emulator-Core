@@ -113,7 +113,7 @@ PTEXT_METRIC_INTERNAL LeGlobalData::GetTextMetricFromCache(LPENUMLOGFONTEXW LogF
 {
     WCHAR buf[LF_FULLFACESIZE * 2];
 
-    swprintf(buf, L"%s@%d", LogFont->elfFullName, LogFont->elfLogFont.lfCharSet);
+    StringUpperW(buf, swprintf(buf, L"%s@%d", LogFont->elfFullName, LogFont->elfLogFont.lfCharSet));
 
     return this->TextMetricCache.Get(buf);
 }
@@ -122,7 +122,7 @@ VOID LeGlobalData::AddTextMetricToCache(LPENUMLOGFONTEXW LogFont, PTEXT_METRIC_I
 {
     WCHAR buf[LF_FULLFACESIZE * 2];
 
-    swprintf(buf, L"%s@%d", LogFont->elfFullName, LogFont->elfLogFont.lfCharSet);
+    StringUpperW(buf, swprintf(buf, L"%s@%d", LogFont->elfFullName, LogFont->elfLogFont.lfCharSet));
 
     this->TextMetricCache.Add(buf, *TextMetric);
 }
@@ -329,8 +329,6 @@ NTSTATUS LeGlobalData::AdjustFontDataInternal(PADJUST_FONT_DATA AdjustData)
     PCWSTR lfFaceName = AdjustData->EnumLogFontEx->elfLogFont.lfFaceName;
     BOOL Vertical = lfFaceName[0] == '@';
 
-    //PrintConsole(L"%s\n%wZ\n\n", lfFaceName + Vertical, &FaceName);
-
     if (NT_FAILED(Status) || wcsicmp(FaceName.Buffer, lfFaceName + Vertical) != 0)
         return STATUS_CONTEXT_MISMATCH;
 
@@ -404,26 +402,6 @@ NTSTATUS LeGlobalData::AdjustFontData(HDC DC, LPENUMLOGFONTEXW EnumLogFontEx, PT
                 GetTextMetricsW(DC, &TextMetric->TextMetricW))
             {
                 TextMetric->Filled = TRUE;
-                /*TextMetric->TextMetricA.tmHeight = TextMetric->TextMetricW.tmHeight;
-                TextMetric->TextMetricA.tmAscent = TextMetric->TextMetricW.tmAscent;
-                TextMetric->TextMetricA.tmDescent = TextMetric->TextMetricW.tmDescent;
-                TextMetric->TextMetricA.tmInternalLeading = TextMetric->TextMetricW.tmInternalLeading;
-                TextMetric->TextMetricA.tmExternalLeading = TextMetric->TextMetricW.tmExternalLeading;
-                TextMetric->TextMetricA.tmAveCharWidth = TextMetric->TextMetricW.tmAveCharWidth;
-                TextMetric->TextMetricA.tmMaxCharWidth = TextMetric->TextMetricW.tmMaxCharWidth;
-                TextMetric->TextMetricA.tmWeight = TextMetric->TextMetricW.tmWeight;
-                TextMetric->TextMetricA.tmOverhang = TextMetric->TextMetricW.tmOverhang;
-                TextMetric->TextMetricA.tmDigitizedAspectX = TextMetric->TextMetricW.tmDigitizedAspectX;
-                TextMetric->TextMetricA.tmDigitizedAspectY = TextMetric->TextMetricW.tmDigitizedAspectY;
-                TextMetric->TextMetricA.tmFirstChar = TextMetric->TextMetricW.tmFirstChar;
-                TextMetric->TextMetricA.tmLastChar = TextMetric->TextMetricW.tmLastChar;
-                TextMetric->TextMetricA.tmDefaultChar = TextMetric->TextMetricW.tmDefaultChar;
-                TextMetric->TextMetricA.tmBreakChar = TextMetric->TextMetricW.tmBreakChar;
-                TextMetric->TextMetricA.tmItalic = TextMetric->TextMetricW.tmItalic;
-                TextMetric->TextMetricA.tmUnderlined = TextMetric->TextMetricW.tmUnderlined;
-                TextMetric->TextMetricA.tmStruckOut = TextMetric->TextMetricW.tmStruckOut;
-                TextMetric->TextMetricA.tmPitchAndFamily = TextMetric->TextMetricW.tmPitchAndFamily;
-                TextMetric->TextMetricA.tmCharSet = TextMetric->TextMetricW.tmCharSet;*/
             }
         }
     }
