@@ -29442,32 +29442,55 @@ typedef String::ByteArray ByteArray;
 #define _HASHTABLE_H_f92cdc12_70f0_4679_aa3d_d9e1a22117ed_
 
 
-typedef struct
-{
-    ULONG           Index;
-    ULARGE_INTEGER  Name;
-
-} HASH_VALUE;
-
-template<class ELEMENT_TYPE, ULONG_PTR TABLE_LENGTH = 1021>
+template<class ELEMENT_TYPE, ULONG_PTR INITIAL_TABLE_SIZE = 521>
 class HashTableT
 {
     typedef ELEMENT_TYPE *PELEMENT_TYPE;
 
+    typedef struct HASH_VALUE
+    {
+        ULONG           Index;
+        ULARGE_INTEGER  Key;
+
+        HASH_VALUE()
+        {
+            Reset();
+        }
+
+        ForceInline BOOL Valid()
+        {
+            return this->Key.QuadPart != 0;
+        }
+
+        ForceInline VOID Reset()
+        {
+            ZeroMemory(this, sizeof(*this));
+        }
+
+        BOOL operator== (const HASH_VALUE& that)
+        {
+            return this->Key.QuadPart == that.Key.QuadPart;
+        }
+
+    } HASH_VALUE;
+
     typedef struct
     {
-        ULARGE_INTEGER  Name;
+        HASH_VALUE      Hash;
         ELEMENT_TYPE    Element;
 
     } HASH_TABLE_ITEM, *PHASH_TABLE_ITEM;
 
-    typedef ml::GrowableArray<HASH_TABLE_ITEM> HashTableEntry;
+    // typedef ml::GrowableArray<HASH_TABLE_ITEM> HashTableEntry;
+    typedef HASH_TABLE_ITEM HashTableEntry;
 
 public:
     NoInline HashTableT()
     {
         this->Entries = nullptr;
         this->CalcTable = nullptr;
+        this->TableUsedSize = 0;
+        this->TableSize = 0;
     }
 
     NoInline ~HashTableT()
@@ -29478,15 +29501,11 @@ public:
 
     NoInline NTSTATUS Initialize()
     {
-        ml::MlInitialize();
+        HashTableEntry *Entry;
 
+        ml::MlInitialize();
         this->CalcTable = new ULONG[this->CalcTableSize];
         if (this->CalcTable == nullptr)
-            return STATUS_NO_MEMORY;
-
-        this->Entries = new HashTableEntry[this->TableSize];
-
-        if (this->Entries == nullptr)
             return STATUS_NO_MEMORY;
 
         ULONG Seed = 0x00100001;
@@ -29508,6 +29527,11 @@ public:
         return STATUS_SUCCESS;
     }
 
+    ULONG_PTR Count()
+    {
+        return this->TableUsedSize;
+    }
+
     NoInline HASH_VALUE HashString(PCSTR Ansi, ULONG_PTR Length = -1)
     {
         PSTR Local;
@@ -29515,9 +29539,10 @@ public:
         if (Length == -1)
             Length = StrLengthA(Ansi);
 
-        Local = (PSTR)AllocStack(Length);
-        CopyMemory(Local, Ansi, Length);
-        StringUpperA(Local, Length);
+        //Local = (PSTR)AllocStack(Length);
+        //CopyMemory(Local, Ansi, Length);
+        //StringUpperA(Local, Length);
+        Local = (PSTR)Ansi;
 
         return HashData(Local, Length);
     }
@@ -29531,14 +29556,15 @@ public:
 
         Length *= sizeof(Unicode[0]);
 
-        Local = (PWSTR)AllocStack(Length);
-        CopyMemory(Local, Unicode, Length);
-        StringUpperW(Local, Length / sizeof(Unicode[0]));
+        //Local = (PWSTR)AllocStack(Length);
+        //CopyMemory(Local, Unicode, Length);
+        //StringUpperW(Local, Length / sizeof(Unicode[0]));
+        Local = (PWSTR)Unicode;
 
         return HashData(Local, Length);
     }
 
-    ForceInline VOID Calc(ULONG b, ULONG& v1, ULONG& v2, ULONG t)
+    ForceInline VOID Update(ULONG b, ULONG& v1, ULONG& v2, ULONG t)
     {
         v1 = this->CalcTable[(t << 8) + b] ^ (v1 + v2);
         v2 = b + v1 + v2 + (v2 << 5) + 3;
@@ -29553,8 +29579,8 @@ public:
         Data = (PBYTE)Bytes;
 
         Hash.Index          = 0x7FED7FED;
-        Hash.Name.LowPart   = 0x7FED7FED;
-        Hash.Name.HighPart  = 0x7FED7FED;
+        Hash.Key.LowPart   = 0x7FED7FED;
+        Hash.Key.HighPart  = 0x7FED7FED;
 
         Seed1 = 0xEEEEEEEE;
         Seed2 = 0xEEEEEEEE;
@@ -29563,9 +29589,9 @@ public:
         {
             b = *Data++;
 
-            Calc(b, Hash.Index, Seed1, 0);
-            Calc(b, Hash.Name.LowPart, Seed2, 1);
-            Calc(b, Hash.Name.HighPart, Seed3, 2);
+            Update(b, Hash.Index, Seed1, 0);
+            Update(b, Hash.Key.LowPart, Seed2, 1);
+            Update(b, Hash.Key.HighPart, Seed3, 2);
         }
 
         return Hash;
@@ -29605,85 +29631,197 @@ public:
     }
 
     template<class STRING_TYPE>
-    NoInline ELEMENT_TYPE& Remove(STRING_TYPE StringKey, const ELEMENT_TYPE& Element)
+    NoInline VOID Remove(STRING_TYPE StringKey)
     {
-        return RemoveElement(HashString(StringKey));
+        RemoveElement(HashString(StringKey));
     }
 
-    NoInline ELEMENT_TYPE& Remove(PVOID Bytes, ULONG_PTR Length, const ELEMENT_TYPE& Element)
+    NoInline VOID Remove(PVOID Bytes, ULONG_PTR Length)
     {
-        return RemoveElement(HashData(Bytes, Length));
+        RemoveElement(HashData(Bytes, Length));
     }
 
 protected:
-    NoInline HASH_TABLE_ITEM& AddElement(const HASH_VALUE& Hash, const ELEMENT_TYPE& Element)
+    NoInline NTSTATUS CheckNeedResize()
     {
-        auto Item = LookupItem(Hash);
+        if (this->TableSize * 3 / 4 > this->TableUsedSize)
+            return STATUS_SUCCESS;
 
-        if (Item != nullptr)
+        ULONG_PTR NewSize, OldSize;
+        HashTableEntry *NewEntries, *OldEntries, *Entry;
+
+        NewSize = GetTableSize(this->TableSize == 0 ? INITIAL_TABLE_SIZE : (this->TableUsedSize * 2 - 1));
+        NewEntries = new HashTableEntry[NewSize];
+        if (NewEntries == nullptr)
+            return STATUS_NO_MEMORY;
+
+        OldEntries = this->Entries;
+        OldSize = this->TableSize;
+
+        this->Entries = NewEntries;
+        this->TableSize = NewSize;
+        this->TableUsedSize = 0;
+
+        if (OldEntries == nullptr)
+            return STATUS_SUCCESS;
+
+        FOR_EACH(Entry, OldEntries, OldSize)
         {
-            Item->Element = Element;
-            return *Item;
+            if (Entry->Hash.Valid())
+                AddElement(Entry->Hash, Entry->Element);
         }
 
-        HashTableEntry& Entry = LookupEntry(Hash);
+        delete[] OldEntries;
 
-        Entry.Add({Hash.Name, Element});
+        return STATUS_SUCCESS;
+    }
 
-        return Entry.GetLast();
+    NoInline HASH_TABLE_ITEM& AddElement(const HASH_VALUE& Hash, const ELEMENT_TYPE& Element)
+    {
+        CheckNeedResize();
+
+        auto Entry = LookupEntry(Hash, TRUE);
+
+        Entry->Hash = Hash;
+        Entry->Element = Element;
+        ++this->TableUsedSize;
+
+        return *Entry;
     }
 
     NoInline VOID RemoveElement(const HASH_VALUE& Hash)
     {
-        PHASH_TABLE_ITEM    Item;
-        ULONG_PTR           Index;
-        HashTableEntry&     Entry = LookupEntry(Hash);
+        auto Entry = LookupEntry(Hash, FALSE);
 
-        Index = 0;
-        FOR_EACH_VEC(Item, Entry)
-        {
-            if (Item->Name.QuadPart == Hash.Name.QuadPart)
-            {
-                Entry.Remove(Index);
-                break;
-            }
+        if (Entry == nullptr)
+            return;
 
-            ++Index;
-        }
+        Entry->Hash.Reset();
+        Entry->Element.~ELEMENT_TYPE();
+        --this->TableUsedSize;
     }
 
     NoInline PELEMENT_TYPE LookupElement(const HASH_VALUE& Hash)
     {
-        auto Item = this->LookupItem(Hash);
-        return Item == nullptr ? nullptr : &Item->Element;
+        auto Entry = this->LookupEntry(Hash, FALSE);
+        return Entry == nullptr ? nullptr : &Entry->Element;
     }
 
-    NoInline PHASH_TABLE_ITEM LookupItem(const HASH_VALUE& Hash)
+    NoInline HashTableEntry* LookupEntry(HASH_VALUE Hash, BOOL Empty)
     {
-        PHASH_TABLE_ITEM Item;
-        HashTableEntry& Entry = LookupEntry(Hash);
+        ULONG_PTR       Index, InitialIndex;
+        HashTableEntry* Entry;
 
-        FOR_EACH_VEC(Item, Entry)
+        if (this->TableSize == 0)
+            return nullptr;
+
+        InitialIndex = Hash.Index % this->TableSize;
+        Index = InitialIndex;
+        Entry = &this->Entries[InitialIndex];
+
+        if (Empty == FALSE)
         {
-            if (Item->Name.QuadPart == Hash.Name.QuadPart)
-                return Item;
+            do
+            {
+                if (Entry->Hash == Hash)
+                    return Entry;
+
+                if (Entry->Hash.Valid() == FALSE)
+                    return nullptr;
+
+                ++Index;
+                ++Entry;
+                Index = Index == this->TableSize ? 0 : Index;
+                Entry = Index == 0 ? this->Entries : Entry;
+
+            } while (Index != InitialIndex);
+        }
+        else
+        {
+            do
+            {
+                if (Entry->Hash == Hash)
+                    return Entry;
+
+                if (Entry->Hash.Valid() == FALSE)
+                    return Entry;
+
+                ++Index;
+                ++Entry;
+                Index = Index == this->TableSize ? 0 : Index;
+                Entry = Index == 0 ? this->Entries : Entry;
+
+            } while (Index != InitialIndex);
         }
 
         return nullptr;
     }
 
-    ForceInline HashTableEntry& LookupEntry(const HASH_VALUE& Hash)
+    BOOL MillerRabin(ULONG_PTR n, ULONG_PTR k)
     {
-        return this->Entries[Hash.Index % this->TableSize];
+        if(n == k) return TRUE;
+        ULONG_PTR s, d, b, e, x;
+
+        // Factor n-1 as d 2^s
+        for(s = 0, d = n - 1; !(d & 1); s++)
+            d >>= 1;
+
+        // x = k^d mod n using exponentiation by squaring
+        // The squaring overflows for n >= 2^32
+        for(x = 1, b = k % n, e = d; e; e >>= 1)
+        {
+            if(e & 1)
+                x = (x * b) % n;
+
+            b = (b * b) % n;
+        }
+
+        // Verify k^(d 2^[0…s-1]) mod n != 1
+        if(x == 1 || x == n-1)
+            return TRUE;
+
+        while(s-- > 1)
+        {
+            x = (x * x) % n;
+            if(x == 1)
+                return FALSE;
+
+            if(x == n-1)
+                return TRUE;
+        }
+
+        return FALSE;
+    }
+
+    BOOL IsPrime(ULONG_PTR n)
+    {
+        return (n > 73 &&
+                !(n % 2 && n % 3 && n % 5 && n % 7 &&
+                  n % 11 && n % 13 && n % 17 && n % 19 && n % 23 && n % 29 &&
+                  n % 31 && n % 37 && n % 41 && n % 43 && n % 47 && n % 53 &&
+                  n % 59 && n % 61 && n % 67 && n % 71 && n % 73)
+                ) ? FALSE:
+                    MillerRabin(n, 2) && MillerRabin(n, 7) && MillerRabin(n, 61);
+    }
+
+    ULONG_PTR GetTableSize(ULONG_PTR TableSize)
+    {
+        if ((TableSize & 1) == 0)
+            ++TableSize;
+
+        while (IsPrime(TableSize) == FALSE)
+            TableSize += 2;
+
+        return TableSize;
     }
 
 protected:
-
     HashTableEntry* Entries;
-    PULONG CalcTable;
+    PULONG          CalcTable;
+    ULONG_PTR       TableSize;
+    ULONG_PTR       TableUsedSize;
 
     static const ULONG_PTR CalcTableSize = 0x500;
-    static const ULONG_PTR TableSize = TABLE_LENGTH;
 };
 
 #endif // _HASHTABLE_H_f92cdc12_70f0_4679_aa3d_d9e1a22117ed_
