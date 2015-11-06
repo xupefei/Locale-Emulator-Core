@@ -27335,6 +27335,694 @@ NTSTATUS DisableHeapCorruptionHelper();
 
 ML_NAMESPACE
 
+#ifndef _TRAITS_H_0c85514c_9b05_4eaf_a9ae_8e46a810207c_
+#define _TRAITS_H_0c85514c_9b05_4eaf_a9ae_8e46a810207c_
+
+template<typename T>
+struct TypeTraits
+{
+    typedef T           VALUE_TYPE;
+    typedef T&          REF_TYPE;
+    typedef const T&    CONST_REF_TYPE;
+    VALUE_TYPE          value;
+};
+
+template<typename T>
+struct TypeTraits<T&>
+{
+    typedef T           VALUE_TYPE;
+    typedef T&          REF_TYPE;
+    typedef const T&    CONST_REF_TYPE;
+    VALUE_TYPE          value;
+};
+
+template<typename T>
+struct TypeTraits<const T&>
+{
+    typedef T           VALUE_TYPE;
+    typedef T&          REF_TYPE;
+    typedef const T&    CONST_REF_TYPE;
+    VALUE_TYPE          value;
+};
+
+template<>
+struct TypeTraits<VOID>
+{
+    typedef VOID VALUE_TYPE;
+    typedef VOID REF_TYPE;
+    typedef VOID CONST_REF_TYPE;
+};
+
+#endif // _TRAITS_H_0c85514c_9b05_4eaf_a9ae_8e46a810207c_
+#ifndef _OBJECT_H_fde9e5ea_50a7_46b2_aa60_bbe6492bedd4_
+#define _OBJECT_H_fde9e5ea_50a7_46b2_aa60_bbe6492bedd4_
+
+
+class ObjectBase
+{
+    ;
+};
+
+class Object : public ObjectBase
+{
+public:
+    virtual ~Object() = 0 {}
+};
+
+#endif // _OBJECT_H_fde9e5ea_50a7_46b2_aa60_bbe6492bedd4_
+#ifndef _POLICY_H_96a491a5_e296_46ff_8503_d35bff2cb7bb_
+#define _POLICY_H_96a491a5_e296_46ff_8503_d35bff2cb7bb_
+
+
+#endif // _POLICY_H_96a491a5_e296_46ff_8503_d35bff2cb7bb_
+#ifndef _POINTER_H_6fac0398_48bd_494d_b268_63d42c5b7dc9_
+#define _POINTER_H_6fac0398_48bd_494d_b268_63d42c5b7dc9_
+
+
+template<typename PtrBase, typename PointerType>
+class PointerImpl
+{
+protected:
+    PULongPtr   RefCount;
+    PointerType Reference;
+
+protected:
+    ULongPtr AddRef()
+    {
+        return RefCount != NULL ? ++*RefCount : 0;
+    }
+
+    ULongPtr Release()
+    {
+        return ((PtrBase *)this)->ReleaseWorker();
+    }
+
+    ULongPtr ReleaseWorker()
+    {
+        if (RefCount == NULL)
+            return 0;
+
+        ULongPtr RefCount = --*this->RefCount;
+
+        if (RefCount == 0)
+        {
+            delete this->RefCount;
+
+            ((PtrBase *)this)->ReleasePointer();
+
+            RefCount = NULL;
+            Reference = NULL;
+        }
+
+        return RefCount;
+    }
+
+    void ReleasePointer()
+    {
+        delete Reference;
+    }
+
+public:
+    PointerImpl()
+    {
+        RefCount = NULL;
+        Reference = NULL;
+    }
+
+    PointerImpl(PointerType Ptr)
+    {
+        (*this) = Ptr;
+    }
+
+    PointerImpl(const PointerImpl<PtrBase, PointerType>& Ptr)
+    {
+        (*this) = Ptr;
+    }
+
+    ~PointerImpl()
+    {
+        Release();
+    }
+
+    PtrBase& operator=(PointerType Ptr)
+    {
+        if (Ptr == Reference)
+            return *((PtrBase *)this);
+
+        Release();
+
+        if (Ptr == NULL)
+        {
+            RefCount = NULL;
+            Reference = NULL;
+        }
+        else
+        {
+            RefCount = new ULongPtr(1);
+            Reference = Ptr;
+        }
+
+        return *((PtrBase *)this);
+    }
+
+    PtrBase& operator=(const PtrBase& Ptr)
+    {
+        if (this == &Ptr)
+            return *((PtrBase *)this);
+
+        Release();
+
+        RefCount = Ptr.RefCount;
+        Reference = Ptr.Reference;
+
+        AddRef();
+
+        return *((PtrBase *)this);
+    }
+
+    Bool operator== (const PointerType Ptr) const
+    {
+        return Reference == Ptr;
+    }
+
+    operator void*() const
+    {
+        return Reference;
+    }
+
+    Bool operator!= (const PointerType Ptr) const
+    {
+        return Reference != Ptr;
+    }
+
+    Bool operator> (const PointerType Ptr) const
+    {
+        return Reference > Ptr;
+    }
+
+    Bool operator< (const PointerType Ptr) const
+    {
+        return Reference < Ptr;
+    }
+
+    Bool operator>= (const PointerType Ptr) const
+    {
+        return Reference >= Ptr;
+    }
+
+    Bool operator<= (const PointerType Ptr) const
+    {
+        return Reference <= Ptr;
+    }
+
+    Bool operator!() const
+    {
+        return Reference != NULL;
+    }
+
+    operator bool() const
+    {
+        return Reference != NULL;
+    }
+
+    PointerType operator-> () const
+    {
+        return Reference;
+    }
+};
+
+template<typename PointerType>
+class Pointer : public PointerImpl<Pointer<PointerType>, PointerType>
+{
+public:
+    const TYPE_OF(*((PointerType)0))& operator[](Int Index) const
+    {
+        return Reference[Index];
+    }
+
+    Pointer<PointerType>& operator=(PointerType Ptr)
+    {
+        return __super::operator=(Ptr);
+    }
+
+    Pointer<PointerType>& operator=(const Pointer<PointerType>& Ptr)
+    {
+        return __super::operator=(Ptr);
+    }
+};
+
+#if ML_USER_MODE
+
+#endif // r3
+
+#endif // _POINTER_H_6fac0398_48bd_494d_b268_63d42c5b7dc9_
+#ifndef _SAFEWINTYPES_H_1bcf869c_5f0d_4e2b_9b04_212129cd7897_
+#define _SAFEWINTYPES_H_1bcf869c_5f0d_4e2b_9b04_212129cd7897_
+
+
+template<>
+class Pointer<HANDLE> : public PointerImpl<Pointer<HANDLE>, HANDLE>
+{
+    friend class PointerImpl<Pointer<HANDLE>, HANDLE>;
+
+    void ReleasePointer()
+    {
+        switch ((ULONG_PTR)Reference)
+        {
+            case (ULONG_PTR)NtCurrentProcess():
+            case (ULONG_PTR)NtCurrentThread():
+                return;
+        }
+
+        ZwClose(Reference);
+    }
+
+public:
+    Pointer<HANDLE>& operator=(HANDLE Ptr)
+    {
+        return __super::operator=(Ptr);
+    }
+
+    Pointer<HANDLE>& operator=(const Pointer<HANDLE>& Ptr)
+    {
+        return __super::operator=(Ptr);
+    }
+};
+
+typedef Pointer<HANDLE> Handle;
+
+#if ML_USER_MODE
+
+class FindHandle : public PointerImpl<FindHandle, HANDLE>
+{
+    friend class PointerImpl<FindHandle, HANDLE>;
+
+    void ReleasePointer()
+    {
+        FindClose(Reference);
+    }
+
+public:
+    FindHandle& operator=(HANDLE Ptr)
+    {
+        return __super::operator=(Ptr);
+    }
+
+    FindHandle& operator=(const FindHandle& Ptr)
+    {
+        return __super::operator=(Ptr);
+    }
+};
+
+#endif // r3
+
+#endif // _SAFEWINTYPES_H_1bcf869c_5f0d_4e2b_9b04_212129cd7897_
+#ifndef _FUNCTION_H_a0ede8da_ec11_4122_bf7f_3b39ea104800_
+#define _FUNCTION_H_a0ede8da_ec11_4122_bf7f_3b39ea104800_
+
+
+template<typename T> class Function;
+
+#pragma warning(push)
+#pragma warning(disable:4510 4610)
+
+template<typename T> class Function : public Function<TYPE_OF(&T::operator())> {};
+
+#pragma warning(pop)
+
+#pragma push_macro("DEFINE_FUNCTION_CLASS")
+
+#undef DEFINE_FUNCTION_CLASS
+#define DEFINE_FUNCTION_CLASS(call_convention)\
+    template<typename R, typename... ARGS> \
+    class Function<R call_convention(ARGS...)> \
+    { \
+    public: \
+        typedef Function<R call_convention(ARGS...)> SELF_TYPE; \
+        typedef R RET_TYPE; \
+        static const ULONG_PTR NumberOfArguments = sizeof...(ARGS); \
+        typedef R (FUNCTION_TYPE)(ARGS...); \
+\
+        class Invoker \
+        { \
+            ULONG_PTR RefCount; \
+        public: \
+            Invoker() : RefCount(1) {} \
+            virtual ~Invoker() {} \
+            virtual R Invoke(ARGS...) = 0; \
+\
+            void AddRef() \
+            { \
+                ++this->RefCount; \
+            } \
+\
+            void Release() \
+            { \
+                if (--this->RefCount == 0) \
+                    delete this; \
+            } \
+\
+        }; \
+\
+        template<typename F> \
+        class FunctionInvoker : public Invoker \
+        { \
+        protected: \
+            F func; \
+\
+        public: \
+            FunctionInvoker(const F& function) : func(function) \
+            { \
+            } \
+\
+            R Invoke(ARGS... args) \
+            { \
+                return func(args...); \
+            } \
+        }; \
+\
+        Invoker *invoker; \
+\
+        NoInline Function(const SELF_TYPE &func) \
+        { \
+            this->invoker = func.invoker; \
+            this->invoker->AddRef(); \
+        } \
+\
+        template<typename F> \
+        NoInline Function(const F &func) \
+        { \
+            this->invoker = new FunctionInvoker<F>(func); \
+        } \
+\
+        template<typename F> \
+        SELF_TYPE& operator=(const F &func) \
+        { \
+            this->~Function(); \
+            this->invoker = new FunctionInvoker<F>(func); \
+            return *this; \
+        } \
+\
+        NoInline ~Function() \
+        { \
+            if (invoker != nullptr) \
+                invoker->Release(); \
+        } \
+\
+        R operator()(ARGS... args) \
+        { \
+            return this->invoker->Invoke(args...); \
+        } \
+    }
+
+#define DEFINE_FUNCTION_POINTER_CLASS(call_convention)\
+    template<typename R, typename... ARGS> \
+    class Function<R (call_convention*)(ARGS...)> \
+    { \
+    public: \
+        typedef Function<R call_convention(ARGS...)> SELF_TYPE; \
+        typedef R RET_TYPE; \
+        static const ULONG_PTR NumberOfArguments = sizeof...(ARGS); \
+        typedef R (FUNCTION_TYPE)(ARGS...); \
+\
+        class Invoker \
+        { \
+            ULONG_PTR RefCount; \
+        public: \
+            Invoker() : RefCount(1) {} \
+            virtual ~Invoker() {} \
+            virtual R Invoke(ARGS...) = 0; \
+\
+            void AddRef() \
+            { \
+                ++this->RefCount; \
+            } \
+\
+            void Release() \
+            { \
+                if (--this->RefCount == 0) \
+                    delete this; \
+            } \
+\
+        }; \
+\
+        template<typename F> \
+        class FunctionInvoker : public Invoker \
+        { \
+        protected: \
+            F func; \
+\
+        public: \
+            FunctionInvoker(const F& function) : func(function) \
+            { \
+            } \
+\
+            R Invoke(ARGS... args) \
+            { \
+                return func(args...); \
+            } \
+        }; \
+\
+        Invoker *invoker; \
+\
+        NoInline Function(const SELF_TYPE &func) \
+        { \
+            this->invoker = func.invoker; \
+            this->invoker->AddRef(); \
+        } \
+\
+        template<typename F> \
+        NoInline Function(const F &func) \
+        { \
+            this->invoker = new FunctionInvoker<F>(func); \
+        } \
+\
+        template<typename F> \
+        SELF_TYPE& operator=(const F &func) \
+        { \
+            this->~Function(); \
+            this->invoker = new FunctionInvoker<F>(func); \
+            return *this; \
+        } \
+\
+        NoInline ~Function() \
+        { \
+            if (invoker != nullptr) \
+                invoker->Release(); \
+        } \
+\
+        R operator()(ARGS... args) \
+        { \
+            return this->invoker->Invoke(args...); \
+        } \
+    };
+
+#define DEFINE_CLASS_METHOD_CLASS(...) \
+    template<typename CLASS, typename R, typename... ARGS> \
+    class Function<R(__VA_ARGS__ CLASS::*)(const CLASS&, ARGS...)> \
+    { \
+    public: \
+        typedef Function<R __VA_ARGS__(const CLASS&, ARGS...)> SELF_TYPE; \
+        typedef R RET_TYPE; \
+        static const ULONG_PTR NumberOfArguments = sizeof...(ARGS); \
+        typedef R (FUNCTION_TYPE)(const CLASS&, ARGS...); \
+\
+        class Invoker \
+        { \
+            ULONG_PTR RefCount; \
+        public: \
+            Invoker() : RefCount(1) {} \
+            virtual ~Invoker() {} \
+            virtual R Invoke(const CLASS&, ARGS...) = 0; \
+\
+            void AddRef() \
+            { \
+                ++this->RefCount; \
+            } \
+\
+            void Release() \
+            { \
+                if (--this->RefCount == 0) \
+                    delete this; \
+            } \
+\
+        }; \
+\
+        template<typename F> \
+        class FunctionInvoker : public Invoker \
+        { \
+        protected: \
+            F func; \
+\
+        public: \
+            FunctionInvoker(const F& function) : func(function) \
+            { \
+            } \
+\
+            R Invoke(const CLASS& thiz, ARGS... args) \
+            { \
+                return func(thiz, args...); \
+            } \
+        }; \
+\
+        Invoker *invoker; \
+\
+        NoInline Function(const SELF_TYPE &func) \
+        { \
+            this->invoker = func.invoker; \
+            this->invoker->AddRef(); \
+        } \
+\
+        template<typename F> \
+        NoInline Function(const F &func) \
+        { \
+            this->invoker = new FunctionInvoker<F>(func); \
+        } \
+\
+        template<typename F> \
+        SELF_TYPE& operator=(const F &func) \
+        { \
+            this->~Function(); \
+            this->invoker = new FunctionInvoker<F>(func); \
+            return *this; \
+        } \
+\
+        NoInline ~Function() \
+        { \
+            if (invoker != nullptr) \
+                invoker->Release(); \
+        } \
+\
+        R operator()(const CLASS& thiz, ARGS... args) \
+        { \
+            return this->invoker->Invoke(thiz, args...); \
+        } \
+    };
+
+
+#define DEFINE_LAMBDA_CLASS(...) \
+    template<typename CLASS, typename R, typename... ARGS> \
+    class Function<R(__VA_ARGS__ CLASS::*)(ARGS...) const> \
+    { \
+    public: \
+        typedef Function<R __VA_ARGS__(ARGS...)> SELF_TYPE; \
+        typedef R RET_TYPE; \
+        static const ULONG_PTR NumberOfArguments = sizeof...(ARGS); \
+        typedef R (FUNCTION_TYPE)(ARGS...); \
+\
+        class Invoker \
+        { \
+            ULONG_PTR RefCount; \
+        public: \
+            Invoker() : RefCount(1) {} \
+            virtual ~Invoker() {} \
+            virtual R Invoke(ARGS...) = 0; \
+\
+            void AddRef() \
+            { \
+                ++this->RefCount; \
+            } \
+\
+            void Release() \
+            { \
+                if (--this->RefCount == 0) \
+                    delete this; \
+            } \
+\
+        }; \
+\
+        template<typename F> \
+        class FunctionInvoker : public Invoker \
+        { \
+        protected: \
+            F func; \
+\
+        public: \
+            FunctionInvoker(const F& function) : func(function) \
+            { \
+            } \
+\
+            R Invoke(ARGS... args) \
+            { \
+                return func(args...); \
+            } \
+        }; \
+\
+        Invoker *invoker; \
+\
+        NoInline Function(const SELF_TYPE &func) \
+        { \
+            this->invoker = func.invoker; \
+            this->invoker->AddRef(); \
+        } \
+\
+        template<typename F> \
+        NoInline Function(const F &func) \
+        { \
+            this->invoker = new FunctionInvoker<F>(func); \
+        } \
+\
+        template<typename F> \
+        SELF_TYPE& operator=(const F &func) \
+        { \
+            this->~Function(); \
+            this->invoker = new FunctionInvoker<F>(func); \
+            return *this; \
+        } \
+\
+        NoInline ~Function() \
+        { \
+            if (invoker != nullptr) \
+                invoker->Release(); \
+        } \
+\
+        R operator()(ARGS... args) \
+        { \
+            return this->invoker->Invoke(args...); \
+        } \
+    };
+
+
+#if ML_X86
+
+DEFINE_FUNCTION_CLASS(__stdcall);
+DEFINE_FUNCTION_CLASS(__cdecl);
+
+DEFINE_FUNCTION_POINTER_CLASS(__stdcall);
+DEFINE_FUNCTION_POINTER_CLASS(__cdecl);
+
+// DEFINE_CLASS_METHOD_CLASS(__stdcall);
+// DEFINE_CLASS_METHOD_CLASS(__cdecl);
+// DEFINE_CLASS_METHOD_CLASS();
+
+DEFINE_LAMBDA_CLASS(__stdcall);
+DEFINE_LAMBDA_CLASS(__cdecl);
+DEFINE_LAMBDA_CLASS();
+
+#if !CPP_CLI_DEFINED
+
+DEFINE_FUNCTION_CLASS(__fastcall);
+DEFINE_FUNCTION_POINTER_CLASS(__fastcall);
+
+// DEFINE_CLASS_METHOD_CLASS(__fastcall);
+DEFINE_LAMBDA_CLASS(__fastcall);
+
+#endif // c++/cli
+
+#elif ML_AMD64
+
+DEFINE_FUNCTION_CLASS(__cdecl);
+DEFINE_FUNCTION_POINTER_CLASS(__cdecl);
+
+// DEFINE_CLASS_METHOD_CLASS(__cdecl);
+DEFINE_LAMBDA_CLASS(__cdecl);
+
+#endif
+
+#pragma pop_macro("DEFINE_FUNCTION_CLASS")
+
+#endif // _FUNCTION_H_a0ede8da_ec11_4122_bf7f_3b39ea104800_
+
 #ifndef _VECTOR_HPP_
 #define _VECTOR_HPP_
 
@@ -29441,11 +30129,16 @@ typedef String::ByteArray ByteArray;
 #ifndef _HASHTABLE_H_f92cdc12_70f0_4679_aa3d_d9e1a22117ed_
 #define _HASHTABLE_H_f92cdc12_70f0_4679_aa3d_d9e1a22117ed_
 
-
-template<class ELEMENT_TYPE, ULONG_PTR INITIAL_TABLE_SIZE = 521>
+template<typename TYPE, ULONG_PTR INITIAL_TABLE_SIZE = 521>
 class HashTableT
 {
-    typedef ELEMENT_TYPE *PELEMENT_TYPE;
+    typedef TypeTraits<TYPE> VALUE_TYPE;
+
+    typedef typename VALUE_TYPE::VALUE_TYPE      VALUE;
+    typedef typename VALUE_TYPE::REF_TYPE        VALUE_REF;
+    typedef typename VALUE_TYPE::CONST_REF_TYPE  CONST_VALUE_REF;
+    typedef VALUE   *PVALUE;
+
 
     typedef struct HASH_VALUE
     {
@@ -29476,13 +30169,75 @@ class HashTableT
 
     typedef struct
     {
-        HASH_VALUE      Hash;
-        ELEMENT_TYPE    Element;
+        HASH_VALUE  Hash;
+        VALUE       Element;
 
     } HASH_TABLE_ITEM, *PHASH_TABLE_ITEM;
 
-    // typedef ml::GrowableArray<HASH_TABLE_ITEM> HashTableEntry;
+
     typedef HASH_TABLE_ITEM HashTableEntry;
+
+    template<class KEY_TYPE>
+    class Hasher
+    {
+    public:
+        static HASH_VALUE Hash(HashTableT* thiz, typename TypeTraits<KEY_TYPE>::CONST_REF_TYPE Key);
+    };
+
+#define HASHER_END };
+#define HASHER(type, argtype) \
+    template<> class Hasher<type> \
+    { \
+    public: \
+        static HASH_VALUE Hash(HashTableT* thiz, argtype Key)
+
+    HASHER(PWSTR, PWSTR)
+    {
+        return thiz->HashString(Key);
+    }
+    HASHER_END
+
+    HASHER(PCWSTR, PCWSTR)
+    {
+        return thiz->HashString(Key);
+    }
+    HASHER_END
+
+    HASHER(INT32, INT32)
+    {
+        return thiz->HashData(&Key, sizeof(Key));
+    }
+    HASHER_END
+
+    HASHER(INT64, INT64)
+    {
+        return thiz->HashData(&Key, sizeof(Key));
+    }
+    HASHER_END
+
+    HASHER(UINT32, UINT32)
+    {
+        return thiz->HashData(&Key, sizeof(Key));
+    }
+    HASHER_END
+
+    HASHER(UINT64, UINT64)
+    {
+        return thiz->HashData(&Key, sizeof(Key));
+    }
+    HASHER_END
+
+    HASHER(LONG, LONG)
+    {
+        return thiz->HashData(&Key, sizeof(Key));
+    }
+    HASHER_END
+
+    HASHER(ULONG, ULONG)
+    {
+        return thiz->HashData(&Key, sizeof(Key));
+    }
+    HASHER_END
 
 public:
     NoInline HashTableT()
@@ -29491,6 +30246,8 @@ public:
         this->CalcTable = nullptr;
         this->TableUsedSize = 0;
         this->TableSize = 0;
+
+        this->GrowthFactor = 1.3;
     }
 
     NoInline ~HashTableT()
@@ -29530,6 +30287,11 @@ public:
     ULONG_PTR Count()
     {
         return this->TableUsedSize;
+    }
+
+    ULONG_PTR Size()
+    {
+        return this->TableSize;
     }
 
     NoInline HASH_VALUE HashString(PCSTR Ansi, ULONG_PTR Length = -1)
@@ -29579,8 +30341,8 @@ public:
         Data = (PBYTE)Bytes;
 
         Hash.Index          = 0x7FED7FED;
-        Hash.Key.LowPart   = 0x7FED7FED;
-        Hash.Key.HighPart  = 0x7FED7FED;
+        Hash.Key.LowPart    = 0x7FED7FED;
+        Hash.Key.HighPart   = 0x7FED7FED;
 
         Seed1 = 0xEEEEEEEE;
         Seed2 = 0xEEEEEEEE;
@@ -29597,24 +30359,24 @@ public:
         return Hash;
     }
 
-    template<class STRING_TYPE>
-    NoInline ELEMENT_TYPE& Add(STRING_TYPE StringKey, const ELEMENT_TYPE& Element)
+    template<typename KEY_TYPE>
+    NoInline VALUE_REF Add(const KEY_TYPE& Key, CONST_VALUE_REF Value)
     {
-        return AddElement(HashString(StringKey), Element).Element;
+        return AddElement(Hasher<KEY_TYPE>::Hash(this, Key), Value).Element;
     }
 
-    NoInline ELEMENT_TYPE& Add(PVOID Bytes, ULONG_PTR Length, const ELEMENT_TYPE& Element)
+    NoInline VALUE_REF Add(PVOID Key, ULONG_PTR Length, CONST_VALUE_REF Value)
     {
-        return AddElement(HashData(Bytes, Length), Element).Element;
+        return AddElement(HashData(Key, Length), Value).Element;
     }
 
-    template<class STRING_TYPE>
-    NoInline PELEMENT_TYPE Get(STRING_TYPE StringKey, ULONG_PTR Length = -1)
+    template<typename KEY_TYPE>
+    NoInline PVALUE Get(const KEY_TYPE& Key)
     {
-        return LookupElement(HashString(StringKey, Length));
+        return LookupElement(Hasher<KEY_TYPE>::Hash(this, Key));
     }
 
-    NoInline PELEMENT_TYPE Get(PVOID Key, ULONG_PTR Length)
+    NoInline PVALUE Get(PVOID Key, ULONG_PTR Length)
     {
         return LookupElement(HashString(Key, Length));
     }
@@ -29642,7 +30404,7 @@ public:
     }
 
 protected:
-    NoInline NTSTATUS CheckNeedResize()
+    NoInline NTSTATUS IncreaseCapacity()
     {
         if (this->TableSize * 3 / 4 > this->TableUsedSize)
             return STATUS_SUCCESS;
@@ -29650,7 +30412,7 @@ protected:
         ULONG_PTR NewSize, OldSize;
         HashTableEntry *NewEntries, *OldEntries, *Entry;
 
-        NewSize = GetTableSize(this->TableSize == 0 ? INITIAL_TABLE_SIZE : (this->TableUsedSize * 2 - 1));
+        NewSize = GetTableSize(this->TableSize == 0 ? INITIAL_TABLE_SIZE : (ULONG_PTR)(this->TableSize * this->GrowthFactor));
         NewEntries = new HashTableEntry[NewSize];
         if (NewEntries == nullptr)
             return STATUS_NO_MEMORY;
@@ -29676,9 +30438,9 @@ protected:
         return STATUS_SUCCESS;
     }
 
-    NoInline HASH_TABLE_ITEM& AddElement(const HASH_VALUE& Hash, const ELEMENT_TYPE& Element)
+    NoInline HASH_TABLE_ITEM& AddElement(const HASH_VALUE& Hash, CONST_VALUE_REF Element)
     {
-        CheckNeedResize();
+        IncreaseCapacity();
 
         auto Entry = LookupEntry(Hash, TRUE);
 
@@ -29697,17 +30459,17 @@ protected:
             return;
 
         Entry->Hash.Reset();
-        Entry->Element.~ELEMENT_TYPE();
+        Entry->Element.~TYPE();
         --this->TableUsedSize;
     }
 
-    NoInline PELEMENT_TYPE LookupElement(const HASH_VALUE& Hash)
+    NoInline PVALUE LookupElement(const HASH_VALUE& Hash)
     {
         auto Entry = this->LookupEntry(Hash, FALSE);
         return Entry == nullptr ? nullptr : &Entry->Element;
     }
 
-    NoInline HashTableEntry* LookupEntry(HASH_VALUE Hash, BOOL Empty)
+    NoInline HashTableEntry* LookupEntry(const HASH_VALUE& Hash, BOOL Empty)
     {
         ULONG_PTR       Index, InitialIndex;
         HashTableEntry* Entry;
@@ -29757,10 +30519,18 @@ protected:
         return nullptr;
     }
 
-    BOOL MillerRabin(ULONG_PTR n, ULONG_PTR k)
+    BOOL MillerRabin(ULONG64 n, ULONG_PTR k)
     {
-        if(n == k) return TRUE;
-        ULONG_PTR s, d, b, e, x;
+        if(n == k)
+            return TRUE;
+
+        if (n == 2 || n == 3 )
+            return TRUE;
+
+        if (n <= 1 || !(n & 1))
+            return FALSE;
+
+        ULONG64 s, d, b, e, x;
 
         // Factor n-1 as d 2^s
         for(s = 0, d = n - 1; !(d & 1); s++)
@@ -29820,6 +30590,7 @@ protected:
     PULONG          CalcTable;
     ULONG_PTR       TableSize;
     ULONG_PTR       TableUsedSize;
+    DOUBLE          GrowthFactor;
 
     static const ULONG_PTR CalcTableSize = 0x500;
 };
@@ -33200,659 +33971,6 @@ _ML_CPP_TAIL_
 #endif
 
 #if CPP_DEFINED
-ML_NAMESPACE
-
-#ifndef _OBJECT_H_fde9e5ea_50a7_46b2_aa60_bbe6492bedd4_
-#define _OBJECT_H_fde9e5ea_50a7_46b2_aa60_bbe6492bedd4_
-
-
-class ObjectBase
-{
-    ;
-};
-
-class Object : public ObjectBase
-{
-public:
-    virtual ~Object() = 0 {}
-};
-
-#endif // _OBJECT_H_fde9e5ea_50a7_46b2_aa60_bbe6492bedd4_
-#ifndef _POLICY_H_96a491a5_e296_46ff_8503_d35bff2cb7bb_
-#define _POLICY_H_96a491a5_e296_46ff_8503_d35bff2cb7bb_
-
-
-#endif // _POLICY_H_96a491a5_e296_46ff_8503_d35bff2cb7bb_
-#ifndef _POINTER_H_6fac0398_48bd_494d_b268_63d42c5b7dc9_
-#define _POINTER_H_6fac0398_48bd_494d_b268_63d42c5b7dc9_
-
-
-template<typename PtrBase, typename PointerType>
-class PointerImpl
-{
-protected:
-    PULongPtr   RefCount;
-    PointerType Reference;
-
-protected:
-    ULongPtr AddRef()
-    {
-        return RefCount != NULL ? ++*RefCount : 0;
-    }
-
-    ULongPtr Release()
-    {
-        return ((PtrBase *)this)->ReleaseWorker();
-    }
-
-    ULongPtr ReleaseWorker()
-    {
-        if (RefCount == NULL)
-            return 0;
-
-        ULongPtr RefCount = --*this->RefCount;
-
-        if (RefCount == 0)
-        {
-            delete this->RefCount;
-
-            ((PtrBase *)this)->ReleasePointer();
-
-            RefCount = NULL;
-            Reference = NULL;
-        }
-
-        return RefCount;
-    }
-
-    void ReleasePointer()
-    {
-        delete Reference;
-    }
-
-public:
-    PointerImpl()
-    {
-        RefCount = NULL;
-        Reference = NULL;
-    }
-
-    PointerImpl(PointerType Ptr)
-    {
-        (*this) = Ptr;
-    }
-
-    PointerImpl(const PointerImpl<PtrBase, PointerType>& Ptr)
-    {
-        (*this) = Ptr;
-    }
-
-    ~PointerImpl()
-    {
-        Release();
-    }
-
-    PtrBase& operator=(PointerType Ptr)
-    {
-        if (Ptr == Reference)
-            return *((PtrBase *)this);
-
-        Release();
-
-        if (Ptr == NULL)
-        {
-            RefCount = NULL;
-            Reference = NULL;
-        }
-        else
-        {
-            RefCount = new ULongPtr(1);
-            Reference = Ptr;
-        }
-
-        return *((PtrBase *)this);
-    }
-
-    PtrBase& operator=(const PtrBase& Ptr)
-    {
-        if (this == &Ptr)
-            return *((PtrBase *)this);
-
-        Release();
-
-        RefCount = Ptr.RefCount;
-        Reference = Ptr.Reference;
-
-        AddRef();
-
-        return *((PtrBase *)this);
-    }
-
-    Bool operator== (const PointerType Ptr) const
-    {
-        return Reference == Ptr;
-    }
-
-    operator void*() const
-    {
-        return Reference;
-    }
-
-    Bool operator!= (const PointerType Ptr) const
-    {
-        return Reference != Ptr;
-    }
-
-    Bool operator> (const PointerType Ptr) const
-    {
-        return Reference > Ptr;
-    }
-
-    Bool operator< (const PointerType Ptr) const
-    {
-        return Reference < Ptr;
-    }
-
-    Bool operator>= (const PointerType Ptr) const
-    {
-        return Reference >= Ptr;
-    }
-
-    Bool operator<= (const PointerType Ptr) const
-    {
-        return Reference <= Ptr;
-    }
-
-    Bool operator!() const
-    {
-        return Reference != NULL;
-    }
-
-    operator bool() const
-    {
-        return Reference != NULL;
-    }
-
-    PointerType operator-> () const
-    {
-        return Reference;
-    }
-};
-
-template<typename PointerType>
-class Pointer : public PointerImpl<Pointer<PointerType>, PointerType>
-{
-public:
-    const TYPE_OF(*((PointerType)0))& operator[](Int Index) const
-    {
-        return Reference[Index];
-    }
-
-    Pointer<PointerType>& operator=(PointerType Ptr)
-    {
-        return __super::operator=(Ptr);
-    }
-
-    Pointer<PointerType>& operator=(const Pointer<PointerType>& Ptr)
-    {
-        return __super::operator=(Ptr);
-    }
-};
-
-#if ML_USER_MODE
-
-#endif // r3
-
-#endif // _POINTER_H_6fac0398_48bd_494d_b268_63d42c5b7dc9_
-#ifndef _SAFEWINTYPES_H_1bcf869c_5f0d_4e2b_9b04_212129cd7897_
-#define _SAFEWINTYPES_H_1bcf869c_5f0d_4e2b_9b04_212129cd7897_
-
-
-template<>
-class Pointer<HANDLE> : public PointerImpl<Pointer<HANDLE>, HANDLE>
-{
-    friend class PointerImpl<Pointer<HANDLE>, HANDLE>;
-
-    void ReleasePointer()
-    {
-        switch ((ULONG_PTR)Reference)
-        {
-            case (ULONG_PTR)NtCurrentProcess():
-            case (ULONG_PTR)NtCurrentThread():
-                return;
-        }
-
-        ZwClose(Reference);
-    }
-
-public:
-    Pointer<HANDLE>& operator=(HANDLE Ptr)
-    {
-        return __super::operator=(Ptr);
-    }
-
-    Pointer<HANDLE>& operator=(const Pointer<HANDLE>& Ptr)
-    {
-        return __super::operator=(Ptr);
-    }
-};
-
-typedef Pointer<HANDLE> Handle;
-
-#if ML_USER_MODE
-
-class FindHandle : public PointerImpl<FindHandle, HANDLE>
-{
-    friend class PointerImpl<FindHandle, HANDLE>;
-
-    void ReleasePointer()
-    {
-        FindClose(Reference);
-    }
-
-public:
-    FindHandle& operator=(HANDLE Ptr)
-    {
-        return __super::operator=(Ptr);
-    }
-
-    FindHandle& operator=(const FindHandle& Ptr)
-    {
-        return __super::operator=(Ptr);
-    }
-};
-
-#endif // r3
-
-#endif // _SAFEWINTYPES_H_1bcf869c_5f0d_4e2b_9b04_212129cd7897_
-#ifndef _FUNCTION_H_a0ede8da_ec11_4122_bf7f_3b39ea104800_
-#define _FUNCTION_H_a0ede8da_ec11_4122_bf7f_3b39ea104800_
-
-
-template<typename T> class Function;
-
-#pragma warning(push)
-#pragma warning(disable:4510 4610)
-
-template<typename T> class Function : public Function<TYPE_OF(&T::operator())> {};
-
-#pragma warning(pop)
-
-#pragma push_macro("DEFINE_FUNCTION_CLASS")
-
-#undef DEFINE_FUNCTION_CLASS
-#define DEFINE_FUNCTION_CLASS(call_convention)\
-    template<typename R, typename... ARGS> \
-    class Function<R call_convention(ARGS...)> \
-    { \
-    public: \
-        typedef Function<R call_convention(ARGS...)> SELF_TYPE; \
-        typedef R RET_TYPE; \
-        static const ULONG_PTR NumberOfArguments = sizeof...(ARGS); \
-        typedef R (FUNCTION_TYPE)(ARGS...); \
-\
-        class Invoker \
-        { \
-            ULONG_PTR RefCount; \
-        public: \
-            Invoker() : RefCount(1) {} \
-            virtual ~Invoker() {} \
-            virtual R Invoke(ARGS...) = 0; \
-\
-            void AddRef() \
-            { \
-                ++this->RefCount; \
-            } \
-\
-            void Release() \
-            { \
-                if (--this->RefCount == 0) \
-                    delete this; \
-            } \
-\
-        }; \
-\
-        template<typename F> \
-        class FunctionInvoker : public Invoker \
-        { \
-        protected: \
-            F func; \
-\
-        public: \
-            FunctionInvoker(const F& function) : func(function) \
-            { \
-            } \
-\
-            R Invoke(ARGS... args) \
-            { \
-                return func(args...); \
-            } \
-        }; \
-\
-        Invoker *invoker; \
-\
-        NoInline Function(const SELF_TYPE &func) \
-        { \
-            this->invoker = func.invoker; \
-            this->invoker->AddRef(); \
-        } \
-\
-        template<typename F> \
-        NoInline Function(const F &func) \
-        { \
-            this->invoker = new FunctionInvoker<F>(func); \
-        } \
-\
-        template<typename F> \
-        SELF_TYPE& operator=(const F &func) \
-        { \
-            this->~Function(); \
-            this->invoker = new FunctionInvoker<F>(func); \
-            return *this; \
-        } \
-\
-        NoInline ~Function() \
-        { \
-            if (invoker != nullptr) \
-                invoker->Release(); \
-        } \
-\
-        R operator()(ARGS... args) \
-        { \
-            return this->invoker->Invoke(args...); \
-        } \
-    }
-
-#define DEFINE_FUNCTION_POINTER_CLASS(call_convention)\
-    template<typename R, typename... ARGS> \
-    class Function<R (call_convention*)(ARGS...)> \
-    { \
-    public: \
-        typedef Function<R call_convention(ARGS...)> SELF_TYPE; \
-        typedef R RET_TYPE; \
-        static const ULONG_PTR NumberOfArguments = sizeof...(ARGS); \
-        typedef R (FUNCTION_TYPE)(ARGS...); \
-\
-        class Invoker \
-        { \
-            ULONG_PTR RefCount; \
-        public: \
-            Invoker() : RefCount(1) {} \
-            virtual ~Invoker() {} \
-            virtual R Invoke(ARGS...) = 0; \
-\
-            void AddRef() \
-            { \
-                ++this->RefCount; \
-            } \
-\
-            void Release() \
-            { \
-                if (--this->RefCount == 0) \
-                    delete this; \
-            } \
-\
-        }; \
-\
-        template<typename F> \
-        class FunctionInvoker : public Invoker \
-        { \
-        protected: \
-            F func; \
-\
-        public: \
-            FunctionInvoker(const F& function) : func(function) \
-            { \
-            } \
-\
-            R Invoke(ARGS... args) \
-            { \
-                return func(args...); \
-            } \
-        }; \
-\
-        Invoker *invoker; \
-\
-        NoInline Function(const SELF_TYPE &func) \
-        { \
-            this->invoker = func.invoker; \
-            this->invoker->AddRef(); \
-        } \
-\
-        template<typename F> \
-        NoInline Function(const F &func) \
-        { \
-            this->invoker = new FunctionInvoker<F>(func); \
-        } \
-\
-        template<typename F> \
-        SELF_TYPE& operator=(const F &func) \
-        { \
-            this->~Function(); \
-            this->invoker = new FunctionInvoker<F>(func); \
-            return *this; \
-        } \
-\
-        NoInline ~Function() \
-        { \
-            if (invoker != nullptr) \
-                invoker->Release(); \
-        } \
-\
-        R operator()(ARGS... args) \
-        { \
-            return this->invoker->Invoke(args...); \
-        } \
-    };
-
-#define DEFINE_CLASS_METHOD_CLASS(...) \
-    template<typename CLASS, typename R, typename... ARGS> \
-    class Function<R(__VA_ARGS__ CLASS::*)(const CLASS&, ARGS...)> \
-    { \
-    public: \
-        typedef Function<R __VA_ARGS__(const CLASS&, ARGS...)> SELF_TYPE; \
-        typedef R RET_TYPE; \
-        static const ULONG_PTR NumberOfArguments = sizeof...(ARGS); \
-        typedef R (FUNCTION_TYPE)(const CLASS&, ARGS...); \
-\
-        class Invoker \
-        { \
-            ULONG_PTR RefCount; \
-        public: \
-            Invoker() : RefCount(1) {} \
-            virtual ~Invoker() {} \
-            virtual R Invoke(const CLASS&, ARGS...) = 0; \
-\
-            void AddRef() \
-            { \
-                ++this->RefCount; \
-            } \
-\
-            void Release() \
-            { \
-                if (--this->RefCount == 0) \
-                    delete this; \
-            } \
-\
-        }; \
-\
-        template<typename F> \
-        class FunctionInvoker : public Invoker \
-        { \
-        protected: \
-            F func; \
-\
-        public: \
-            FunctionInvoker(const F& function) : func(function) \
-            { \
-            } \
-\
-            R Invoke(const CLASS& thiz, ARGS... args) \
-            { \
-                return func(thiz, args...); \
-            } \
-        }; \
-\
-        Invoker *invoker; \
-\
-        NoInline Function(const SELF_TYPE &func) \
-        { \
-            this->invoker = func.invoker; \
-            this->invoker->AddRef(); \
-        } \
-\
-        template<typename F> \
-        NoInline Function(const F &func) \
-        { \
-            this->invoker = new FunctionInvoker<F>(func); \
-        } \
-\
-        template<typename F> \
-        SELF_TYPE& operator=(const F &func) \
-        { \
-            this->~Function(); \
-            this->invoker = new FunctionInvoker<F>(func); \
-            return *this; \
-        } \
-\
-        NoInline ~Function() \
-        { \
-            if (invoker != nullptr) \
-                invoker->Release(); \
-        } \
-\
-        R operator()(const CLASS& thiz, ARGS... args) \
-        { \
-            return this->invoker->Invoke(thiz, args...); \
-        } \
-    };
-
-
-#define DEFINE_LAMBDA_CLASS(...) \
-    template<typename CLASS, typename R, typename... ARGS> \
-    class Function<R(__VA_ARGS__ CLASS::*)(ARGS...) const> \
-    { \
-    public: \
-        typedef Function<R __VA_ARGS__(ARGS...)> SELF_TYPE; \
-        typedef R RET_TYPE; \
-        static const ULONG_PTR NumberOfArguments = sizeof...(ARGS); \
-        typedef R (FUNCTION_TYPE)(ARGS...); \
-\
-        class Invoker \
-        { \
-            ULONG_PTR RefCount; \
-        public: \
-            Invoker() : RefCount(1) {} \
-            virtual ~Invoker() {} \
-            virtual R Invoke(ARGS...) = 0; \
-\
-            void AddRef() \
-            { \
-                ++this->RefCount; \
-            } \
-\
-            void Release() \
-            { \
-                if (--this->RefCount == 0) \
-                    delete this; \
-            } \
-\
-        }; \
-\
-        template<typename F> \
-        class FunctionInvoker : public Invoker \
-        { \
-        protected: \
-            F func; \
-\
-        public: \
-            FunctionInvoker(const F& function) : func(function) \
-            { \
-            } \
-\
-            R Invoke(ARGS... args) \
-            { \
-                return func(args...); \
-            } \
-        }; \
-\
-        Invoker *invoker; \
-\
-        NoInline Function(const SELF_TYPE &func) \
-        { \
-            this->invoker = func.invoker; \
-            this->invoker->AddRef(); \
-        } \
-\
-        template<typename F> \
-        NoInline Function(const F &func) \
-        { \
-            this->invoker = new FunctionInvoker<F>(func); \
-        } \
-\
-        template<typename F> \
-        SELF_TYPE& operator=(const F &func) \
-        { \
-            this->~Function(); \
-            this->invoker = new FunctionInvoker<F>(func); \
-            return *this; \
-        } \
-\
-        NoInline ~Function() \
-        { \
-            if (invoker != nullptr) \
-                invoker->Release(); \
-        } \
-\
-        R operator()(ARGS... args) \
-        { \
-            return this->invoker->Invoke(args...); \
-        } \
-    };
-
-
-#if ML_X86
-
-DEFINE_FUNCTION_CLASS(__stdcall);
-DEFINE_FUNCTION_CLASS(__cdecl);
-
-DEFINE_FUNCTION_POINTER_CLASS(__stdcall);
-DEFINE_FUNCTION_POINTER_CLASS(__cdecl);
-
-// DEFINE_CLASS_METHOD_CLASS(__stdcall);
-// DEFINE_CLASS_METHOD_CLASS(__cdecl);
-// DEFINE_CLASS_METHOD_CLASS();
-
-DEFINE_LAMBDA_CLASS(__stdcall);
-DEFINE_LAMBDA_CLASS(__cdecl);
-DEFINE_LAMBDA_CLASS();
-
-#if !CPP_CLI_DEFINED
-
-DEFINE_FUNCTION_CLASS(__fastcall);
-DEFINE_FUNCTION_POINTER_CLASS(__fastcall);
-
-// DEFINE_CLASS_METHOD_CLASS(__fastcall);
-DEFINE_LAMBDA_CLASS(__fastcall);
-
-#endif // c++/cli
-
-#elif ML_AMD64
-
-DEFINE_FUNCTION_CLASS(__cdecl);
-DEFINE_FUNCTION_POINTER_CLASS(__cdecl);
-
-// DEFINE_CLASS_METHOD_CLASS(__cdecl);
-DEFINE_LAMBDA_CLASS(__cdecl);
-
-#endif
-
-#pragma pop_macro("DEFINE_FUNCTION_CLASS")
-
-#endif // _FUNCTION_H_a0ede8da_ec11_4122_bf7f_3b39ea104800_
-
-
-ML_NAMESPACE_END;
 #endif
 
 ML_NAMESPACE
