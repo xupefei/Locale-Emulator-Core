@@ -115,7 +115,7 @@ PTEXT_METRIC_INTERNAL LeGlobalData::GetTextMetricFromCache(LPENUMLOGFONTEXW LogF
 
     StringUpperW(buf, swprintf(buf, L"%s@%d", LogFont->elfFullName, LogFont->elfLogFont.lfCharSet));
 
-    return this->TextMetricCache.Get(buf);
+    return this->TextMetricCache.Get((PWSTR)buf);
 }
 
 VOID LeGlobalData::AddTextMetricToCache(LPENUMLOGFONTEXW LogFont, PTEXT_METRIC_INTERNAL TextMetric)
@@ -124,7 +124,7 @@ VOID LeGlobalData::AddTextMetricToCache(LPENUMLOGFONTEXW LogFont, PTEXT_METRIC_I
 
     StringUpperW(buf, swprintf(buf, L"%s@%d", LogFont->elfFullName, LogFont->elfLogFont.lfCharSet));
 
-    this->TextMetricCache.Add(buf, *TextMetric);
+    this->TextMetricCache.Add((PWSTR)buf, *TextMetric);
 }
 
 HGDIOBJ NTAPI LeGetStockObject(LONG Object)

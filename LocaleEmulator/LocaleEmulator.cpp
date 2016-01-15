@@ -5,6 +5,24 @@ ML_OVERLOAD_NEW
 #pragma comment(linker, "/ENTRY:DllMain")
 #pragma comment(linker, "/SECTION:.text,ERW /MERGE:.rdata=.text /MERGE:.data=.text")
 #pragma comment(linker, "/SECTION:.Asuna,ERW /MERGE:.text=.Asuna")
+#pragma comment(linker, "/EXPORT:GetFileAttributesA=_FuckStupid2DJGame@4")
+
+EXTC ULONG NTAPI FuckStupid2DJGame(PCSTR FileName)
+{
+    return FILE_ATTRIBUTE_NORMAL;
+/*
+    PVOID Rubbish;
+    PLDR_MODULE Garbage;
+
+    Garbage = FindLdrModuleByHandle(nullptr);
+    Rubbish = _ReturnAddress();
+
+    if (PtrOffset(Rubbish, Garbage->EntryPoint) < 100 && StrCompareA(FileName, "2djgame.txt") == 0)
+        return FILE_ATTRIBUTE_NORMAL;
+
+    return Io::QueryFileAttributes(ml::String::Decode(FileName, StrLengthA(FileName), CP_ACP));
+*/
+}
 
 PLeGlobalData g_GlobalData;
 

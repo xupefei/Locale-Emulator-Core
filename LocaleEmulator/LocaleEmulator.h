@@ -1,7 +1,7 @@
 #ifndef _LOCALEEMULATOR_H_cd444a0d_c7f9_44b2_aac8_8107e9a07ca2_
 #define _LOCALEEMULATOR_H_cd444a0d_c7f9_44b2_aac8_8107e9a07ca2_
 
-#include "MyLibrary.h"
+#include "ml.h"
 
 
 #define ARCHEAGE_VER 0
@@ -489,6 +489,9 @@ public:
     LeGlobalData()
     {
         ZeroMemory(this, sizeof(*this));
+
+        new (&this->TextMetricCache) TYPE_OF(this->TextMetricCache);
+
         IF_EXIST(LeGlobalData::LogFile)
         {
             InitLog(this->LogFile);
