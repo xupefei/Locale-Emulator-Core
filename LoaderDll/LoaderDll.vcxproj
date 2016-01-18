@@ -75,7 +75,7 @@
       <SubSystem>NotSet</SubSystem>
       <ImportLibrary>.\Release\LoaderDll.lib</ImportLibrary>
       <NoEntryPoint>true</NoEntryPoint>
-      <AdditionalDependencies>mylib_nt.lib;undoc_ntdll.lib;ntdll.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>undoc_ntdll.lib;ntdll.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <AdditionalOptions> /ltcg</AdditionalOptions>
       <ModuleDefinitionFile>.\LoaderDll.def</ModuleDefinitionFile>
       <GenerateDebugInformation>true</GenerateDebugInformation>

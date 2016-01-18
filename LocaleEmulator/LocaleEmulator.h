@@ -132,9 +132,10 @@ typedef struct
     ULONG                           OemCodePage;
     ULONG                           LocaleID;
     ULONG                           DefaultCharset;
+    ULONG                           HookUILanguageApi;
     WCHAR                           DefaultFaceName[LF_FACESIZE];
     RTL_TIME_ZONE_INFORMATION       Timezone;
-    ULONG                           NumberOfRegistryRedirectionEntries;
+    ULONG64                         NumberOfRegistryRedirectionEntries;
     REGISTRY_REDIRECTION_ENTRY64    RegistryReplacement[1];
 
 } LOCALE_ENUMLATOR_ENVIRONMENT_BLOCK, *PLOCALE_ENUMLATOR_ENVIRONMENT_BLOCK, LEB, *PLEB;
@@ -221,19 +222,21 @@ inline VOID InitDefaultLeb(PLEB Leb)
 
     static WCHAR FaceName[]     = L"MS Gothic";
 
-    Leb->AnsiCodePage    = CP_SHIFTJIS;
-    Leb->OemCodePage     = CP_SHIFTJIS;
-    Leb->LocaleID        = 0x411;
-    Leb->DefaultCharset  = SHIFTJIS_CHARSET;
+    Leb->AnsiCodePage      = CP_SHIFTJIS;
+    Leb->OemCodePage       = CP_SHIFTJIS;
+    Leb->LocaleID          = 0x411;
+    Leb->DefaultCharset    = SHIFTJIS_CHARSET;
+	Leb->HookUILanguageApi = 0;
 
 #else
 
     static WCHAR FaceName[]     = L"Microsoft YaHei";
 
-    Leb->AnsiCodePage    = CP_GB2312;
-    Leb->OemCodePage     = CP_GB2312;
-    Leb->LocaleID        = 0x804;
-    Leb->DefaultCharset  = GB2312_CHARSET;
+    Leb->AnsiCodePage      = CP_GB2312;
+    Leb->OemCodePage       = CP_GB2312;
+    Leb->LocaleID          = 0x804;
+    Leb->DefaultCharset    = GB2312_CHARSET;
+	Leb->HookUILanguageApi = 0;
 
 #endif
 
@@ -347,7 +350,7 @@ OpenOrCreateLePeb(
     return LePeb;
 }
 
-#define ENABLE_LOG 0
+#define ENABLE_LOG 1
 
 #if ENABLE_LOG
 

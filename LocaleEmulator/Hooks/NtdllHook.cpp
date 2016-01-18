@@ -896,7 +896,12 @@ NTSTATUS LeGlobalData::HookNtdllRoutines(PVOID Ntdll)
     ADD_FILTER_(NtInitializeNlsFiles,       LeNtInitializeNlsFiles,     this);
     ADD_FILTER_(NtQueryDefaultLocale,       LeNtQueryDefaultLocale,     this);
     ADD_FILTER_(NtQueryDefaultUILanguage,   LeNtQueryDefaultUILanguage, this);
-    //ADD_FILTER_(NtQueryInstallUILanguage,   LeNtQueryInstallUILanguage, this);
+
+    if (LeGetGlobalData()->GetLeb()->HookUILanguageApi != 0)
+    {
+        ADD_FILTER_(NtQueryInstallUILanguage, LeNtQueryInstallUILanguage, this);
+        WriteLog(L"NtQueryInstallUILanguage hooked");
+    }
     //ADD_FILTER_(NtQueryInformationThread,   LeNtQueryInformationThread, this);
     //ADD_FILTER_(NtTerminateThread,          LeNtTerminateThread,        this);
 
