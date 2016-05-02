@@ -134,7 +134,7 @@ NTSTATUS LeGlobalData::Initialize()
     PPEB_BASE       Peb;
     NTSTATUS        Status;
     NLSTABLEINFO    NlsTableInfo;
-    UNICODE_STRING  SystemDirectory, NlsFileName, OemNlsFileName, LangFileName;
+    UNICODE_STRING  SystemDirectory, NlsFileName, OemNlsFileName, LangFileName, Win32U;
     PKEY_VALUE_PARTIAL_INFORMATION IndexValue;
 
     IsLoader = IsLeLoader();
@@ -227,6 +227,11 @@ NTSTATUS LeGlobalData::Initialize()
 
         Status = RtlDuplicateUnicodeString(RTL_DUPSTR_ADD_NULL, &SystemDirectory, &this->SystemDirectory);
         FAIL_RETURN(Status);
+
+        ml::String Win32U_Path(SystemDirectory);
+        Win32U_Path += L"\\win32u.dll";
+        this->HasWin32U = Nt_GetFileAttributes(Win32U_Path.GetBuffer()) != INVALID_FILE_ATTRIBUTES;
+        WriteLog(L"win32u: %s, has:%d", Win32U_Path.GetBuffer(), this->HasWin32U);
 
         RtlInitEmptyString(&NlsFileName, nullptr, 0);
         RtlInitEmptyString(&OemNlsFileName, nullptr, 0);

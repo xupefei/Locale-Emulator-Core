@@ -1478,17 +1478,31 @@ NTSTATUS LeGlobalData::HookUser32Routines(PVOID User32)
     Status = NtAddAtom(PROP_WINDOW_UNICODE_PROC, CONST_STRLEN(PROP_WINDOW_UNICODE_PROC) * sizeof(WCHAR), &this->AtomUnicodeProc);
     FAIL_RETURN(Status);
 */
-    NtUserMessageCall = FindNtUserMessageCall2(User32);
-    if (NtUserMessageCall == nullptr)
-        return STATUS_NOT_FOUND;
+    if (this->HasWin32U)
+    {
+        HMODULE Win32uMod = (HMODULE)Nt_GetModuleHandle(L"win32u.dll");
+        if (Win32uMod == nullptr)
+            return STATUS_NOT_FOUND;
+        NtUserMessageCall = Nt_GetProcAddress(Win32uMod, "NtUserMessageCall");
+        NtUserCreateWindowEx = Nt_GetProcAddress(Win32uMod, "NtUserCreateWindowEx");
+        NtUserDefSetText = Nt_GetProcAddress(Win32uMod, "NtUserDefSetText");
+        if (!NtUserMessageCall || !NtUserCreateWindowEx || !NtUserDefSetText)
+            return STATUS_NOT_FOUND;
+    }
+    else
+    {
+        NtUserMessageCall = FindNtUserMessageCall2(User32);
+        if (NtUserMessageCall == nullptr)
+            return STATUS_NOT_FOUND;
 
-    NtUserCreateWindowEx = FindNtUserCreateWindowEx(User32);
-    if (NtUserCreateWindowEx == nullptr)
-        return STATUS_NOT_FOUND;
+        NtUserCreateWindowEx = FindNtUserCreateWindowEx(User32);
+        if (NtUserCreateWindowEx == nullptr)
+            return STATUS_NOT_FOUND;
 
-    NtUserDefSetText = FindNtUserDefSetText(User32);
-    if (NtUserDefSetText == nullptr)
-        return STATUS_NOT_FOUND;
+        NtUserDefSetText = FindNtUserDefSetText(User32);
+        if (NtUserDefSetText == nullptr)
+            return STATUS_NOT_FOUND;
+    }
 
     if (HookStub.StubEnumFontFamiliesExW != nullptr)
     {

@@ -393,6 +393,7 @@ class LeGlobalData
 {
 protected:
     BOOLEAN Wow64 : 1;
+    BOOLEAN HasWin32U : 1; //windows 10.0.14295 or higher
 
     LEPEB LePeb;
 

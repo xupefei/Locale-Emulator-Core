@@ -812,9 +812,21 @@ NTSTATUS LeGlobalData::HookGdi32Routines(PVOID Gdi32)
 
     *(PVOID *)&GdiGetCodePage = GetRoutineAddress(Gdi32, "GdiGetCodePage");
 
-    NtGdiHfontCreate = FindNtGdiHfontCreate(Gdi32);
-    if (NtGdiHfontCreate == nullptr)
-        return STATUS_NOT_FOUND;
+    if (this->HasWin32U)
+    {
+        HMODULE Win32uMod = (HMODULE)Nt_GetModuleHandle(L"win32u.dll");
+        if (Win32uMod == nullptr)
+            return STATUS_NOT_FOUND;
+        NtGdiHfontCreate = Nt_GetProcAddress(Win32uMod, "NtGdiHfontCreate");
+        if (!NtGdiGetGlyphOutline)
+            return STATUS_NOT_FOUND;
+    }
+    else
+    {
+        NtGdiHfontCreate = FindNtGdiHfontCreate(Gdi32);
+        if (NtGdiHfontCreate == nullptr)
+            return STATUS_NOT_FOUND;
+    }
 
     RtlInitializeCriticalSectionAndSpinCount(&HookRoutineData.Gdi32.GdiLock, 4000);
 
