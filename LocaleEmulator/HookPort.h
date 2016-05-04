@@ -247,6 +247,7 @@ typedef struct
         {
             ULONG   SysEnterSize;
             PVOID   KiFastSystemCall;
+            PVOID   Wow64SyscallJumpStub;
             BYTE    Wow64FsC0Backup[0x10];
             BOOLEAN IsWow64 : 1;
 

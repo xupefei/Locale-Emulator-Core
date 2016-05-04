@@ -857,23 +857,24 @@ PVOID GetWow64SyscallJumpStub()
 
 NTSTATUS HookSysCall_Wow64(HOOK_PORT_GLOBAL_INFO *GlobalInfo)
 {
-    BOOL        SecondLevel;
+    BOOL        HpInstalled;
     __m128      Temp;
     PBYTE       Buffer;
     ULONG       Protect, StubSysEnterProtect;
     ULONG_PTR   SrcLength, DestLength;
-    PVOID       FsC0, HookRoutine;
+    PVOID       Wow64SyscallJumpStub, HookRoutine;
     NTSTATUS    Status;
     PPEB_BASE   Peb;
 
     const static ULONG_PTR Wow64FsC0Size = 7;
 
-    FsC0 = GetWow64SyscallJumpStub();
+    Wow64SyscallJumpStub = GetWow64SyscallJumpStub();
+    GlobalInfo->User.Wow64SyscallJumpStub = Wow64SyscallJumpStub;
 
-    SecondLevel = *(PBYTE)FsC0 == PUSH;
+    HpInstalled = *(PBYTE)Wow64SyscallJumpStub == PUSH;
 
     Status = ProtectVirtualMemory(
-                FsC0,
+                Wow64SyscallJumpStub,
                 Wow64FsC0Size,
                 PAGE_EXECUTE_READWRITE,
                 &Protect
@@ -890,18 +891,18 @@ NTSTATUS HookSysCall_Wow64(HOOK_PORT_GLOBAL_INFO *GlobalInfo)
 
     GlobalInfo->User.SysEnterSize = ULONG_PTR_MAX;
 
-    Temp = _mm_loadu_ps((float *)FsC0);
+    Temp = _mm_loadu_ps((float *)Wow64SyscallJumpStub);
     _mm_storeu_ps((float *)GlobalInfo->User.Wow64FsC0Backup, Temp);
 
-    CopyOneOpCode(StubSysEnter, FsC0, &DestLength, &SrcLength, 0, 0x10);
-    if (SecondLevel)
+    CopyOneOpCode(StubSysEnter, Wow64SyscallJumpStub, &DestLength, &SrcLength, 0, 0x10);
+    if (HpInstalled)
     {
-        CopyOneOpCode(PtrAdd(StubSysEnter, DestLength), PtrAdd(FsC0, SrcLength), NULL, NULL, 0, 0x10 - DestLength);
+        CopyOneOpCode(PtrAdd(StubSysEnter, DestLength), PtrAdd(Wow64SyscallJumpStub, SrcLength), NULL, NULL, 0, 0x10 - DestLength);
     }
     else
     {
         *(PBYTE)PtrAdd(StubSysEnter, DestLength) = PUSH;
-        *(PVOID *)PtrAdd(StubSysEnter, DestLength + 1) = PtrAdd(FsC0, SrcLength);
+        *(PVOID *)PtrAdd(StubSysEnter, DestLength + 1) = PtrAdd(Wow64SyscallJumpStub, SrcLength);
         *(PBYTE)PtrAdd(StubSysEnter, DestLength + 1 + sizeof(PVOID)) = 0xC3;
     }
 
@@ -929,13 +930,13 @@ NTSTATUS HookSysCall_Wow64(HOOK_PORT_GLOBAL_INFO *GlobalInfo)
     *(PVOID *)&Buffer[1] = HookRoutine;
     Buffer[5] = 0xC3;
 
-    _mm_storeu_ps((float *)FsC0, Temp);
+    _mm_storeu_ps((float *)Wow64SyscallJumpStub, Temp);
 
     if (StubSysEnterProtect != PAGE_EXECUTE_READWRITE)
         ProtectVirtualMemory(StubSysEnter, Wow64FsC0Size, StubSysEnterProtect, &StubSysEnterProtect);
 
     if (Protect != PAGE_EXECUTE_READWRITE)
-        ProtectVirtualMemory(FsC0, Wow64FsC0Size, Protect, &Protect);
+        ProtectVirtualMemory(Wow64SyscallJumpStub, Wow64FsC0Size, Protect, &Protect);
 
     return Status;
 }
@@ -943,13 +944,13 @@ NTSTATUS HookSysCall_Wow64(HOOK_PORT_GLOBAL_INFO *GlobalInfo)
 NTSTATUS UnHookSysCall_Wow64(HOOK_PORT_GLOBAL_INFO *GlobalInfo)
 {
     ULONG       Protect;
-    PVOID       FsC0;
+    PVOID       Wow64SyscallJumpStub;
     NTSTATUS    Status;
 
-    FsC0 = (PVOID)ReadFsPtr(0xC0);
+    Wow64SyscallJumpStub = GlobalInfo->User.Wow64SyscallJumpStub;
 
     Status = ProtectVirtualMemory(
-                FsC0,
+                Wow64SyscallJumpStub,
                 0x10,
                 PAGE_EXECUTE_READWRITE,
                 &Protect
@@ -957,10 +958,10 @@ NTSTATUS UnHookSysCall_Wow64(HOOK_PORT_GLOBAL_INFO *GlobalInfo)
     if (!NT_SUCCESS(Status))
         return Status;
 
-    _mm_storeu_ps((float *)FsC0, _mm_loadu_ps((float *)GlobalInfo->User.Wow64FsC0Backup));
+    _mm_storeu_ps((float *)Wow64SyscallJumpStub, _mm_loadu_ps((float *)GlobalInfo->User.Wow64FsC0Backup));
 
     if (Protect != PAGE_EXECUTE_READWRITE)
-        ProtectVirtualMemory(FsC0, 0x10, Protect, &Protect);
+        ProtectVirtualMemory(Wow64SyscallJumpStub, 0x10, Protect, &Protect);
 
     return Status;
 }
