@@ -566,7 +566,7 @@ int NTAPI LeEnumFontFamiliesExW(HDC hdc, LPLOGFONTW lpLogfont, FONTENUMPROCW lpP
 {
     INT                 Result;
     GDI_ENUM_FONT_PARAM Param;
-    LOGFONTW            LocalLogFont;
+    LOGFONTW            lf;
     PLeGlobalData       GlobalData = LeGetGlobalData();
 
     if (NT_FAILED(Param.Prepare(GlobalData)))
@@ -575,11 +575,14 @@ int NTAPI LeEnumFontFamiliesExW(HDC hdc, LPLOGFONTW lpLogfont, FONTENUMPROCW lpP
     Param.Callback      = lpProc;
     Param.GlobalData    = GlobalData;
     Param.lParam        = lParam;
-    Param.Charset       = lpLogfont->lfCharSet;
+    Param.Charset       = lpLogfont == nullptr ? DEFAULT_CHARSET : lpLogfont->lfCharSet;
 
-    LocalLogFont = *lpLogfont;
+	if (lpLogfont == nullptr)
+		ZeroMemory(&lf, sizeof(lf));
+	else
+		lf = *lpLogfont;
 
-    return GlobalData->EnumFontFamiliesExW(hdc, &LocalLogFont, LeEnumFontCallbackW, (LPARAM)&Param, dwFlags);
+    return GlobalData->EnumFontFamiliesExW(hdc, &lf, LeEnumFontCallbackW, (LPARAM)&Param, dwFlags);
 }
 
 int NTAPI LeEnumFontFamiliesExA(HDC hdc, LPLOGFONTA lpLogfont, FONTENUMPROCA lpProc, LPARAM lParam, DWORD dwFlags)
@@ -591,9 +594,12 @@ int NTAPI LeEnumFontFamiliesExA(HDC hdc, LPLOGFONTA lpLogfont, FONTENUMPROCA lpP
     Param.Callback      = lpProc;
     Param.GlobalData    = GlobalData;
     Param.lParam        = lParam;
-    Param.Charset       = lpLogfont->lfCharSet;
+	Param.Charset       = lpLogfont == nullptr ? DEFAULT_CHARSET : lpLogfont->lfCharSet;
 
-    ConvertAnsiLogfontToUnicode(&lf, lpLogfont);
+	if (lpLogfont == nullptr)
+		ZeroMemory(&lf, sizeof(lf));
+	else
+		ConvertAnsiLogfontToUnicode(&lf, lpLogfont);
 
     return LeEnumFontFamiliesExW(hdc, &lf, LeEnumFontCallbackAFromW, (LPARAM)&Param, dwFlags);
 }
