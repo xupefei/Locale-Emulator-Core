@@ -10,7 +10,7 @@ typedef struct
 
 PVOID SearchLdrInitNtContinue()
 {
-    return WalkOpCodeT(LdrInitializeThunk, 0x25,
+    return WalkOpCodeT(LdrInitializeThunk, 0x5B,
                 WalkOpCodeM(Buffer, OpLength, Ret)
                 {
                     if (Buffer[0] == CALL && (PVOID)GetCallDestination(Buffer) == NtContinue)
