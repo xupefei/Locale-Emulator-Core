@@ -2290,6 +2290,11 @@ InstallHookPort(
         if (FunctionName[0] != 'Z' || FunctionName[1] != 'w')
             continue;
 
+        // ignore "Zw*CHPE" functions. "CHPE" is introduced in Windows 10 Redstone 3 update, which translates ARM64 codes to amd64.
+        UINT FunctionNameLength = strlen(FunctionName);
+        if (FunctionNameLength >= 6 && strcmp(FunctionName + FunctionNameLength - 4, "CHPE") == 0)
+            continue;
+
         Function = (PBYTE)(AddressOfFunctions[*AddressOfNameOrdinals] + BaseAddress);
 
         if (Function[0] != 0xB8)  // mov eax, const
