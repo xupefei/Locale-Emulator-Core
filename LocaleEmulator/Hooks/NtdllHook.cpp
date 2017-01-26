@@ -882,6 +882,8 @@ NTSTATUS LeGlobalData::HookNtdllRoutines(PVOID Ntdll)
     if (LdrInitNtContinue == nullptr)
         return STATUS_NOT_SUPPORTED;
 
+	WriteLog(L"LdrInitNtContinue %08X", LdrInitNtContinue);
+
     ADD_FILTER_(NtCreateUserProcess,        LeNtCreateUserProcess,      this);
 
     if (IsLeLoader())

@@ -446,17 +446,9 @@ PDLL_HOOK_ENTRY LookupDllHookEntry(PCUNICODE_STRING BaseDllName)
 {
     static DLL_HOOK_ENTRY DllHookEntries[] =
     {
-#if ARCHEAGE_VER
-
-        { RTL_CONSTANT_STRING(L"x2game.dll"),       &LeGlobalData::HookX2GameRoutines },
-
-#else
-
         { RTL_CONSTANT_STRING(L"USER32.dll"),       &LeGlobalData::HookUser32Routines,      &LeGlobalData::UnHookUser32Routines },
         { RTL_CONSTANT_STRING(L"GDI32.dll"),        &LeGlobalData::HookGdi32Routines,       &LeGlobalData::UnHookGdi32Routines },
         { RTL_CONSTANT_STRING(L"KERNEL32.dll"),     &LeGlobalData::HookKernel32Routines,    &LeGlobalData::UnHookKernel32Routines },
-
-#endif // ARCHEAGE_VER
     };
 
     PDLL_HOOK_ENTRY Entry;
@@ -531,198 +523,6 @@ VOID LeGlobalData::DllNotification(ULONG NotificationReason, PCLDR_DLL_NOTIFICAT
         HookModule(DllBase, DllName, NotificationReason == LDR_DLL_NOTIFICATION_REASON_LOADED);
     }
 }
-
-#if ARCHEAGE_VER
-
-#pragma comment(linker, "/EXPORT:ShellExecuteA=SHELL32.ShellExecuteA")
-#pragma comment(linker, "/EXPORT:ShellExecuteW=SHELL32.ShellExecuteW")
-
-LONG WINAPI GetSQLiteKeyExceptionHandler(PEXCEPTION_POINTERS ExceptionInfo)
-{
-    PDR7_INFO   Dr7;
-    PBYTE       SQLiteKeyBuffer;
-
-    switch (ExceptionInfo->ExceptionRecord->ExceptionCode)
-    {
-        case EXCEPTION_SINGLE_STEP:
-            SQLiteKeyBuffer = (PBYTE)ExceptionInfo->ContextRecord->Dr3 - 0xC;
-
-            Dr7 = (PDR7_INFO)&ExceptionInfo->ContextRecord->Dr7;
-            Dr7->L3 = 0;
-            ExceptionInfo->ContextRecord->Dr3 = 0;
-
-            for (ULONG_PTR Count = 0x10; Count; --Count)
-            {
-                PrintConsoleW(L"0x%02X, ", *SQLiteKeyBuffer++);
-                if (Count == 9)
-                    PrintConsoleW(L"\n");
-            }
-
-            PrintConsoleW(L"\nPress any key to exit...");
-            PauseConsole();
-            Ps::ExitProcess(0);
-
-            break;
-
-        default:
-            return EXCEPTION_CONTINUE_SEARCH;
-    }
-
-    // return EXCEPTION_CONTINUE_EXECUTION;
-}
-
-PSTR CDECL x2_strstr(PSTR Str, PCSTR SubStr)
-{
-    PrintConsole(L"%S -> %S\n", Str, SubStr);
-
-    if (SubStr != nullptr && !StrCompareA(SubStr, "+acpxmk"))
-    {
-        return Str;
-    }
-
-    return strstr(Str, SubStr);
-}
-
-VOID (*StubX2_FillDecryptTable)();
-
-VOID X2_FillDecryptTable()
-{
-    PBYTE       KeyBuffer;
-    CONTEXT     Context;
-    PDR7_INFO   Dr7;
-
-    INLINE_ASM mov KeyBuffer, esi;
-
-    KeyBuffer += 8 + 0xC;
-
-    PrintConsole(L"return address %p\n", _ReturnAddress());
-
-    Context.ContextFlags = CONTEXT_DEBUG_REGISTERS;
-    NtGetContextThread(CurrentThread, &Context);
-
-    Dr7 = (PDR7_INFO)&Context.Dr7;
-
-    Dr7->L3     = 1;
-    Dr7->LEN3   = DR7_LEN_4_BYTE;
-    Dr7->RW3    = DR7_RW_WRITE;
-    Context.Dr3 = (ULONG_PTR)KeyBuffer;
-
-    NtSetContextThread(CurrentThread, &Context);
-
-    RtlAddVectoredExceptionHandler(TRUE, GetSQLiteKeyExceptionHandler);
-
-    StubX2_FillDecryptTable();
-}
-
-VOID FASTCALL PrintKey(PBYTE SQLiteKeyBuffer)
-{
-    NtFileDisk f;
-
-    f.Create(L"dump.bin");
-    f.Write(SQLiteKeyBuffer, 0x100);
-
-    SQLiteKeyBuffer += 8;
-
-    for (ULONG_PTR Count = 0x10; Count; --Count)
-    {
-        PrintConsoleW(L"0x%02X, ", *SQLiteKeyBuffer++);
-        if (Count == 9)
-            PrintConsoleW(L"\n");
-    }
-
-    PrintConsoleW(L"\nPress any key to exit...");
-    PauseConsole();
-    Ps::ExitProcess(0);
-}
-
-NAKED VOID GetKey()
-{
-    INLINE_ASM
-    {
-        mov     ecx, esi;
-        call    PrintKey
-    }
-}
-
-NTSTATUS LeGlobalData::HookX2GameRoutines(PVOID X2Game)
-{
-    BYTE StubFillDecryptTable[] =
-    {
-        0x55, 0x8b, 0xec, 0x81, 0xec, 0x08, 0x08, 0x00, 0x00, 0xa1,
-    };
-
-    BYTE StubSaveStackCookie[] =
-    {
-        0x33, 0xC5,
-    };
-
-    SEARCH_PATTERN_DATA Pattern[] =
-    {
-        ADD_PATTERN(StubFillDecryptTable, 0, sizeof(StubFillDecryptTable) + 4),
-        ADD_PATTERN(StubSaveStackCookie),
-    };
-
-    ULONG_PTR           SearchLength;
-    PVOID               StartAddress, FillDecryptTable, FillDecryptTable2;
-    PLDR_MODULE         X2GameModule;
-    PIMAGE_NT_HEADERS   NtHeaders;
-
-    //MessageBoxW(0, L"??", 0, 0);
-
-    X2GameModule = FindLdrModuleByHandle(X2Game);
-
-    AllocConsole();
-
-    LOOP_ONCE
-    {
-        NtHeaders   = ImageNtHeaders(X2GameModule->DllBase);
-        StartAddress = PtrAdd(X2GameModule->DllBase, IMAGE_FIRST_SECTION(NtHeaders)->VirtualAddress);
-        SearchLength = X2GameModule->SizeOfImage - PtrOffset(StartAddress, X2GameModule->DllBase);
-
-        FillDecryptTable = SearchPatternSafe(Pattern, countof(Pattern), StartAddress, SearchLength);
-
-        if (FillDecryptTable == nullptr)
-        {
-            PrintConsoleW(L"can't find FillDecryptTable\n");
-            continue;
-        }
-
-        StartAddress = PtrAdd(FillDecryptTable, 1);
-        SearchLength = X2GameModule->SizeOfImage - PtrOffset(StartAddress, X2GameModule->DllBase);
-
-        FillDecryptTable2 = SearchPatternSafe(
-                                Pattern,
-                                countof(Pattern),
-                                StartAddress,
-                                SearchLength
-                            );
-
-        if (FillDecryptTable2 != nullptr)
-        {
-            PrintConsoleW(L"found multi FillDecryptTable\n");
-            break;
-        }
-
-        PVOID MSVCR100 = FindLdrModuleByName(&WCS2US(L"MSVCR100.dll"))->DllBase;
-        PVOID STRSTR = GetRoutineAddress(MSVCR100, "strstr");
-
-        Mp::PATCH_MEMORY_DATA f[] =
-        {
-            //INLINE_HOOK_JUMP_NULL(STRSTR, x2_strstr),
-            Mp::FunctionJumpVa(FillDecryptTable, X2_FillDecryptTable, StubX2_FillDecryptTable),
-        };
-
-        Mp::PatchMemory(f, countof(f), MSVCR100);
-
-        return STATUS_SUCCESS;
-    }
-
-    PrintConsoleW(L"Press any key to exit...");
-    PauseConsole();
-    Ps::ExitProcess(0);
-}
-
-#endif // ARCHEAGE_VER
 
 NTSTATUS LeGlobalData::UnInitialize()
 {
@@ -808,22 +608,6 @@ BOOL Initialize(PVOID BaseAddress)
 
     ml::MlInitialize();
 
-#if !ARCHEAGE_VER
-
-    if (FindThreadFrame(LE_LOADER_PROCESS) == nullptr)
-    {
-        Kernel32 = GetKernel32Ldr();
-        if (Kernel32 != nullptr && FLAG_ON(Kernel32->Flags, LDRP_PROCESS_ATTACH_CALLED))
-        {
-            ml::String ModuleList = L"kernel32 has been loaded before the initialization of LE\n\nModule list:\n\n";
-            GenerateModuleList(ModuleList);
-            ExceptionBox(ModuleList);
-            return FALSE;
-        }
-    }
-
-#endif
-
     LdrDisableThreadCalloutsForDll(BaseAddress);
 
     GlobalData = new LeGlobalData;
@@ -832,90 +616,9 @@ BOOL Initialize(PVOID BaseAddress)
 
     LeSetGlobalData(GlobalData);
 
-#if ARCHEAGE_VER
-
-
-/*++
-
-.text:394FF6CB C7 45 EC 04 0D 02 0F                    mov     [ebp+var_14], 0F020D04h
-.text:394FF6D2 C7 45 F0 00 05 08 09                    mov     [ebp+var_10], 9080500h
-.text:394FF6D9 C7 45 F4 07 0A 0E 06                    mov     [ebp+var_C], 60E0A07h
-.text:394FF6E0 C7 45 F8 01 0C 0B 03                    mov     [ebp+var_8], 30B0C01h
-.text:394FF6E7 C7 45 D4 02 0E 03 0F                    mov     [ebp+var_2C], 0F030E02h
-.text:394FF6EE C7 45 D8 15 0B 0C 06                    mov     [ebp+var_28], 60C0B15h
-.text:394FF6F5 C7 45 DC 05 08 04 11                    mov     [ebp+var_24], 11040805h
-.text:394FF6FC C7 45 E0 07 0D 17 01                    mov     [ebp+var_20], 1170D07h
-.text:394FF703 C7 45 E4 16 13 12 0A                    mov     [ebp+var_1C], 0A121316h
-.text:394FF70A C7 45 E8 09 00 14 10                    mov     [ebp+var_18], 10140009h
-.text:394FF711 C7 45 B4 11 0B 04 10                    mov     [ebp+var_4C], 10040B11h
-.text:394FF718 C7 45 B8 18 09 0F 06                    mov     [ebp+var_48], 60F0918h
-.text:394FF71F C7 45 BC 00 1F 12 05                    mov     [ebp+var_44], 5121F00h
-.text:394FF726 C7 45 C0 1C 08 15 19                    mov     [ebp+var_40], 1915081Ch
-.text:394FF72D C7 45 C4 17 1D 0A 13                    mov     [ebp+var_3C], 130A1D17h
-.text:394FF734 C7 45 C8 1E 0E 16 1B                    mov     [ebp+var_38], 1B160E1Eh
-.text:394FF73B C7 45 CC 0D 1A 0C 02                    mov     [ebp+var_34], 20C1A0Dh
-.text:394FF742 C7 45 D0 14 01 03 07                    mov     [ebp+var_30], 7030114h
-.text:394FF749 75 0F                                   jnz     short loc_394FF75A
-.text:394FF74B E8 00 FD FF FF                          call    X2_FillDecryptTable
-.text:394FF750 C7 05 A8 48 A4 39 01 00+                mov     dword_39A448A8, 1
-.text:394FF75A
-.text:394FF75A                         loc_394FF75A:                           ; CODE XREF: sub_394FF690+B9j
-
-------------------------------------------------------------------------------------------------------------------
-
-.text:394FF7FA 8B 36                                   mov     esi, [esi]           <---- fuck here
-
-------------------------------------------------------------------------------------------------------------------
-
-
-.text:394FF7FC 83 EE 0A                                sub     esi, 0Ah
-.text:394FF7FF 0F 84 C5 02 00 00                       jz      loc_394FFACA
-.text:394FF805 83 EE 02                                sub     esi, 2
-.text:394FF808 0F 84 E2 00 00 00                       jz      loc_394FF8F0
-.text:394FF80E 83 EE 02                                sub     esi, 2
-.text:394FF811 0F 85 98 04 00 00                       jnz     loc_394FFCAF
-.text:394FF817 BF 80 26 A4 39                          mov     edi, offset unk_39A42680
-.text:394FF81C 8D 64 24 00                             lea     esp, [esp+0]
-
-++*/
-
-    AllocConsole();
-
-    PLDR_MODULE X2Game = FindLdrModuleByName(&USTR(L"x2game.dll"));
-    PVOID _getkey;
-
-    BYTE stub[] =
-    {
-        0x8B, 0x36, 0x83, 0xEE, 0x0A, 0x0F, 0x84, 0xC5, 0x02, 0x00, 0x00, 0x83, 0xEE, 0x02, 0x0F, 0x84, 0xE2, 0x00, 0x00, 0x00, 0x83, 0xEE, 0x02, 0x0F, 0x85, 0x98, 0x04, 0x00, 0x00,
-    };
-
-    SEARCH_PATTERN_DATA Pattern[] =
-    {
-        ADD_PATTERN(stub),
-    };
-
-    _getkey = SearchPattern(Pattern, countof(Pattern), X2Game->DllBase, X2Game->SizeOfImage);
-
-    PrintConsole(L"%p\n", _getkey);
-
-    Mp::PATCH_MEMORY_DATA f[] =
-    {
-        //INLINE_HOOK_JUMP_RVA_NULL(0x4FF7FA, GetKey),
-        //Mp::FunctionJumpRva(0x51C8BA, GetKey),
-        Mp::FunctionJumpVa(_getkey, GetKey),
-    };
-
-    Mp::PatchMemory(f, countof(f), X2Game->DllBase);
-
-    //GlobalData->HookX2GameRoutines(FindLdrModuleByName(&USTR(L"x2game.dll"))->DllBase);
-
-#else
-
     Status = GlobalData->Initialize();
     if (NT_FAILED(Status))
         return FALSE;
-
-#endif
 
     WriteLog(L"init ret");
 
