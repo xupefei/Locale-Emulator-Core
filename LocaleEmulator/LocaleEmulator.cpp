@@ -608,6 +608,18 @@ BOOL Initialize(PVOID BaseAddress)
 
     ml::MlInitialize();
 
+    if (FindThreadFrame(LE_LOADER_PROCESS) == nullptr)
+    {
+        Kernel32 = GetKernel32Ldr();
+        if (Kernel32 != nullptr && FLAG_ON(Kernel32->Flags, LDRP_PROCESS_ATTACH_CALLED))
+        {
+            ml::String ModuleList = L"kernel32 has been loaded before the initialization of LE\n\nModule list:\n\n";
+            GenerateModuleList(ModuleList);
+            ExceptionBox(ModuleList);
+            return FALSE;
+        }
+    }
+
     LdrDisableThreadCalloutsForDll(BaseAddress);
 
     GlobalData = new LeGlobalData;
