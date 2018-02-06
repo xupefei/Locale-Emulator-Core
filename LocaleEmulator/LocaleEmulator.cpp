@@ -251,8 +251,13 @@ NTSTATUS LeGlobalData::Initialize()
         Status = GetNlsFile(&OemNlsFileName, GetLeb()->OemCodePage, REGPATH_CODEPAGE);
         FAIL_RETURN(Status);
 
-        Status = GetLangFile(&LangFileName, GetLeb()->LocaleID, REGPATH_LANGUAGE);
-        FAIL_RETURN(Status);
+        // Windows 10 1803 removed all keys under "HKLM\SYSTEM\CurrentControlSet\Control\Nls\Language".
+        // Since the value of all keys are "l_intl.nls" since Windows XP, 
+        // we suppose that MS is not going to change it in the near future.
+        // 
+        //Status = GetLangFile(&LangFileName, GetLeb()->LocaleID, REGPATH_LANGUAGE);
+        //FAIL_RETURN(Status);
+        RtlCreateUnicodeString(&LangFileName, L"l_intl.nls");
 
         NtFileMemory AnsiFile, OemFile, LangFile;
 
