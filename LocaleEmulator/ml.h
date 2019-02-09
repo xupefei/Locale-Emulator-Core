@@ -11169,6 +11169,11 @@ typedef struct
 
 #define DIRECTORY_ALL_ACCESS (STANDARD_RIGHTS_REQUIRED | 0xF)
 
+typedef struct _DIRECTORY_BASIC_INFORMATION {
+    UNICODE_STRING ObjectName;
+    UNICODE_STRING ObjectTypeName;
+} DIRECTORY_BASIC_INFORMATION, *PDIRECTORY_BASIC_INFORMATION;
+
 //begin_winnt
 
 //
@@ -12759,6 +12764,32 @@ ZwOpenDirectoryObject(
     OUT PHANDLE             DirectoryHandle,
     IN  ACCESS_MASK         DesiredAccess,
     IN  POBJECT_ATTRIBUTES  ObjectAttributes
+);
+
+NATIVE_API
+NTSTATUS
+NTAPI
+NtQueryDirectoryObject(
+    HANDLE  DirectoryHandle,
+    PVOID   Buffer,
+    ULONG   Length,
+    BOOLEAN ReturnSingleEntry,
+    BOOLEAN RestartScan,
+    PULONG  Context,
+    PULONG  ReturnLength
+);
+
+NATIVE_API
+NTSTATUS
+NTAPI
+ZwQueryDirectoryObject(
+    HANDLE  DirectoryHandle,
+    PVOID   Buffer,
+    ULONG   Length,
+    BOOLEAN ReturnSingleEntry,
+    BOOLEAN RestartScan,
+    PULONG  Context,
+    PULONG  ReturnLength
 );
 
 NATIVE_API

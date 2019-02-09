@@ -39,9 +39,14 @@ UserMessageCall(INLPCREATESTRUCT)
 
     SEH_TRY
     {
-        PCBT_CREATE_PARAM CbtCreateParam = (PCBT_CREATE_PARAM)CreateStructW->lpCreateParams;
-        if (CbtCreateParam->Magic == CBT_PROC_PARAM_CONTEXT)
-            CreateStructW->lpCreateParams = CbtCreateParam->CreateParams;
+        LOOP_ONCE
+        {
+            if (!CreateStructW) break;
+            PCBT_CREATE_PARAM CbtCreateParam = (PCBT_CREATE_PARAM)CreateStructW->lpCreateParams;
+            if (!CbtCreateParam) break;
+            if (CbtCreateParam->Magic == CBT_PROC_PARAM_CONTEXT)
+                CreateStructW->lpCreateParams = CbtCreateParam->CreateParams;
+        }
     }
     SEH_EXCEPT(EXCEPTION_EXECUTE_HANDLER)
     {
@@ -656,6 +661,8 @@ BOOL VerifyWindowParam(PCBT_CREATE_PARAM CbtCreateParam, PCBT_PROC_PARAM CbtPara
 {
     SEH_TRY
     {
+        // FIXME: SEH DOESN'T work
+        if (!CbtCreateParam || !CbtParam) return FALSE;
         return CbtCreateParam->StackPointer == CbtParam->StackPointer;
     }
     SEH_EXCEPT(EXCEPTION_EXECUTE_HANDLER)
@@ -1205,7 +1212,7 @@ PVOID FindNtUserMessageCall2(PVOID User32)
                             SEH_TRY
                             {
                                 Buffer = GetCallDestination(Buffer);
-                                if (IsSystemCall(Buffer) == FALSE)
+                                if (!Buffer || IsSystemCall(Buffer) == FALSE)
                                     break;
                             }
                             SEH_EXCEPT(EXCEPTION_EXECUTE_HANDLER)

@@ -1,5 +1,7 @@
 #include "stdafx.h"
 
+extern BOOL Initialize(PVOID BaseAddress);
+
 typedef struct
 {
     USHORT  Size;
@@ -134,21 +136,24 @@ NoInline PVOID FASTCALL LoadSelfAsFirstDll(PVOID ReturnAddress)
 
         WriteProtectMemory(CurrentProcess, LePeb->LdrLoadDllAddress, LePeb->LdrLoadDllBackup, LePeb->LdrLoadDllBackupSize);
 
-        UNICODE_STRING DllPath;
-
-        RtlInitUnicodeString(&DllPath, LePeb->LeDllFullPath);
-
-        if (NT_FAILED(LdrLoadDll(nullptr, nullptr, &DllPath, &DllHandle)))
-        {
-            CloseLePeb(LePeb);
+        if(!Initialize(&__ImageBase))
             break;
-        }
 
-        *(PULONG_PTR)_AddressOfReturnAddress() += PtrOffset(DllHandle, &__ImageBase);
+        // UNICODE_STRING DllPath;
+
+        // RtlInitUnicodeString(&DllPath, LePeb->LeDllFullPath);
+
+        // if (NT_FAILED(LdrLoadDll(nullptr, nullptr, &DllPath, &DllHandle)))
+        // {
+            // CloseLePeb(LePeb);
+            // break;
+        // }
+
+        // *(PULONG_PTR)_AddressOfReturnAddress() += PtrOffset(DllHandle, &__ImageBase);
 
         CloseLePeb(LePeb);
 
-        BaseToFree = &__ImageBase;
+        // BaseToFree = &__ImageBase;
     }
 
     return BaseToFree;
@@ -165,11 +170,11 @@ LoadFirstDll(
 {
     PVOID BaseToFree;
 
-    //ExceptionBox(L"inject");
+    // ExceptionBox(L"inject");
 
     BaseToFree = LoadSelfAsFirstDll(_ReturnAddress());
-    if (BaseToFree != nullptr)
-        Mm::FreeVirtualMemory(BaseToFree);
+    // if (BaseToFree != nullptr)
+        // Mm::FreeVirtualMemory(BaseToFree);
 
     return LdrLoadDll(PathToFile, DllCharacteristics, ModuleFileName, DllHandle);
 }
@@ -265,7 +270,9 @@ NTSTATUS LeGlobalData::InjectSelfToChildProcess(HANDLE Process, PCLIENT_ID Cid)
     if (this->Wow64 && !Ps::IsWow64Process(Process))
         return STATUS_NOT_SUPPORTED;
 
-    SizeOfImage = FindLdrModuleByHandle(&__ImageBase)->SizeOfImage;
+    LePeb = GetLePeb();
+
+    SizeOfImage = ImageGetSizeOfImage(&__ImageBase);
 
     SelfShadow = nullptr;
     Status = AllocVirtualMemoryEx(Process, &SelfShadow, SizeOfImage);
@@ -273,19 +280,15 @@ NTSTATUS LeGlobalData::InjectSelfToChildProcess(HANDLE Process, PCLIENT_ID Cid)
     if (NT_FAILED(Status))
         return Status;
 
-    LocalSelfShadow = AllocateMemoryP(SizeOfImage);
+    Status = LoadPeImage(LePeb->LeDllFullPath, &LocalSelfShadow, nullptr, 0);
     WriteLog(L"LocalSelfShadow: %p", Status);
-    if (LocalSelfShadow == nullptr)
-    {
-        Mm::FreeVirtualMemory(SelfShadow, Process);
-        return STATUS_NO_MEMORY;
-    }
+    if (NT_FAILED(Status))
+        return Status;
 
-    CopyMemory(LocalSelfShadow, &__ImageBase, SizeOfImage);
-    RelocPeImage(LocalSelfShadow, &__ImageBase, nullptr, SelfShadow);
+    RelocPeImage(LocalSelfShadow, LocalSelfShadow, nullptr, SelfShadow);
 
     Status = WriteMemory(Process, SelfShadow, LocalSelfShadow, SizeOfImage);
-    FreeMemoryP(LocalSelfShadow);
+    UnloadPeImage(LocalSelfShadow);
 
     WriteLog(L"WriteMemory: %p", Status);
 
@@ -294,8 +297,6 @@ NTSTATUS LeGlobalData::InjectSelfToChildProcess(HANDLE Process, PCLIENT_ID Cid)
         Mm::FreeVirtualMemory(SelfShadow, Process);
         return Status;
     }
-
-    LePeb = GetLePeb();
 
     PVOID ooxxAddress = LePeb->LdrLoadDllAddress;
     BYTE ooxxBuffer[16];

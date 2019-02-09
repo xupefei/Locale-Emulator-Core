@@ -188,6 +188,7 @@ typedef struct
     ULONG_PTR   LdrLoadDllBackupSize;
     BYTE        LdrLoadDllBackup[16];
     WCHAR       LeDllFullPath[MAX_NTPATH];
+    WCHAR       LeDllDirPath[MAX_NTPATH];
     LEB         Leb;
 
 } LOCALE_ENUMLATOR_PROCESS_ENVIRONMENT_BLOCK, *PLOCALE_ENUMLATOR_PROCESS_ENVIRONMENT_BLOCK, LEPEB, *PLEPEB;
@@ -246,6 +247,91 @@ inline VOID InitDefaultLeb(PLEB Leb)
 }
 
 inline
+NTSTATUS
+LeOpenDirectoryObject(
+    PHANDLE DirectoryHandle,
+    PWSTR   DirectoryNameBuffer,
+    HANDLE  RootHandle
+)
+{
+    NTSTATUS                     Status;
+    OBJECT_ATTRIBUTES            ObjectAttributes;
+    UNICODE_STRING               DirectoryName;
+
+    DirectoryName.Buffer          = DirectoryNameBuffer;
+    DirectoryName.Length          = wcslen(DirectoryNameBuffer) * sizeof(WCHAR);
+    DirectoryName.MaximumLength   = DirectoryName.Length;
+
+    InitializeObjectAttributes(&ObjectAttributes, &DirectoryName, OBJ_CASE_INSENSITIVE, RootHandle, nullptr);
+
+    return NtOpenDirectoryObject(DirectoryHandle, DIRECTORY_ALL_ACCESS, &ObjectAttributes);
+}
+
+inline
+BOOL
+LeFindSectionObject(
+    PHANDLE         SectionHandle,
+    PUNICODE_STRING SectionName,
+    ULONG           Depth,
+    HANDLE          RootHandle
+)
+{
+    NTSTATUS                     Status;
+    OBJECT_ATTRIBUTES            ObjectAttributes;
+    PDIRECTORY_BASIC_INFORMATION Buffer;
+    ULONG                        BufferSize;
+    ULONG                        Context;
+    ULONG                        RetSize;
+    HANDLE                       SubDirHandle;
+
+    if (Depth == 0)
+    {
+        InitializeObjectAttributes(&ObjectAttributes, SectionName, 0, RootHandle, nullptr);
+        Status = NtOpenSection(SectionHandle, SECTION_ALL_ACCESS, &ObjectAttributes);
+        if (NT_FAILED(Status))
+            return FALSE;
+        return TRUE;
+    }
+    else
+    {
+        BufferSize = 0x400;
+        // XXX: Use _alloca instead of AllocStack for memory continuity
+        // XXX: Also do not use AllocateMemory
+        Buffer = (PDIRECTORY_BASIC_INFORMATION) _alloca(BufferSize);
+        do
+        {
+            Buffer = (PDIRECTORY_BASIC_INFORMATION) _alloca(BufferSize);
+            BufferSize *= 2;
+            Status = NtQueryDirectoryObject(RootHandle, (PVOID)Buffer, BufferSize, FALSE, TRUE, &Context, &RetSize);
+        } while (Status == STATUS_MORE_ENTRIES || Status == STATUS_BUFFER_TOO_SMALL);
+        if (!NT_SUCCESS(Status))
+            return FALSE;
+        while ((Buffer->ObjectName.Length != 0) && (Buffer->ObjectTypeName.Length != 0))
+        {
+            if (memcmp(Buffer->ObjectTypeName.Buffer, L"Directory", Buffer->ObjectTypeName.Length))
+            {
+                ++Buffer;
+                continue;
+            }
+            InitializeObjectAttributes(&ObjectAttributes, &Buffer->ObjectName, OBJ_CASE_INSENSITIVE, RootHandle, nullptr);
+            Status = NtOpenDirectoryObject(&SubDirHandle, DIRECTORY_ALL_ACCESS, &ObjectAttributes);
+            if (NT_FAILED(Status))
+            {
+                ++Buffer;
+                continue;
+            }
+            if(LeFindSectionObject(SectionHandle, SectionName, Depth-1, SubDirHandle)) {
+                NtClose(SubDirHandle);
+                return TRUE;
+            }
+            NtClose(SubDirHandle);
+            ++Buffer;
+        }
+    }
+    return FALSE;
+}
+
+inline
 PLEPEB
 OpenOrCreateLePeb(
     ULONG_PTR   ProcessId   = CurrentPid(),
@@ -254,52 +340,68 @@ OpenOrCreateLePeb(
 )
 {
     NTSTATUS            Status;
+    WCHAR               RootNameBuffer[MAX_NTPATH];
     WCHAR               SectionNameBuffer[MAX_NTPATH];
     OBJECT_ATTRIBUTES   ObjectAttributes;
-    UNICODE_STRING      SectionName, BaseNamedObjectsName;
-    HANDLE              SectionHandle, BaseNamedObjects;
+    UNICODE_STRING      SectionName;
+    HANDLE              SectionHandle, RootHandle;
     PLEPEB              LePeb;
     ULONG_PTR           ViewSize, SessionId;
     LARGE_INTEGER       MaximumSize;
+
+    // ExceptionBox(L"OpenOrCreateLePeb");
 
     SessionId = GetSessionId(ProcessId);
     if (SessionId == INVALID_SESSION_ID)
         return nullptr;
 
-    BaseNamedObjectsName.Length         = swprintf(SectionNameBuffer, L"\\Sessions\\%d\\BaseNamedObjects", SessionId) * sizeof(WCHAR);
-    BaseNamedObjectsName.MaximumLength  = BaseNamedObjectsName.Length;
-    BaseNamedObjectsName.Buffer         = SectionNameBuffer;
+    swprintf(RootNameBuffer, L"\\Sessions\\%d\\BaseNamedObjects", SessionId);
 
-    InitializeObjectAttributes(&ObjectAttributes, &BaseNamedObjectsName, OBJ_CASE_INSENSITIVE, nullptr, nullptr);
-    Status = NtOpenDirectoryObject(&BaseNamedObjects, DIRECTORY_ALL_ACCESS, &ObjectAttributes);
+    Status = LeOpenDirectoryObject(&RootHandle, RootNameBuffer, nullptr);
     if (NT_FAILED(Status))
-        return nullptr;
+        return FALSE;
 
-    SectionName.Length          = (USHORT)GetLePebSectionName(SectionNameBuffer, ProcessId) * sizeof(WCHAR);
-    SectionName.MaximumLength   = SectionName.Length;
+    SectionName.Length          = (USHORT) GetLePebSectionName(SectionNameBuffer, ProcessId) * sizeof(WCHAR);
+    SectionName.MaximumLength   = sizeof(SectionNameBuffer);
     SectionName.Buffer          = SectionNameBuffer;
 
-    InitializeObjectAttributes(&ObjectAttributes, &SectionName, 0, BaseNamedObjects, nullptr);
+    InitializeObjectAttributes(&ObjectAttributes, &SectionName, 0, RootHandle, nullptr);
 
     Status = NtOpenSection(&SectionHandle, SECTION_ALL_ACCESS, &ObjectAttributes);
-    if (NT_FAILED(Status) && Create)
-    {
-        MaximumSize.QuadPart = sizeof(*LePeb) + ExtraSize;
-        Status = NtCreateSection(
-                    &SectionHandle,
-                    SECTION_ALL_ACCESS,
-                    &ObjectAttributes,
-                    &MaximumSize,
-                    PAGE_READWRITE,
-                    SEC_COMMIT,
-                    nullptr
-                );
-    }
-
-    NtClose(BaseNamedObjects);
-
     if (NT_FAILED(Status))
-        return nullptr;
+    {
+        if (Create)
+        {
+            MaximumSize.QuadPart = sizeof(*LePeb) + ExtraSize;
+            Status = NtCreateSection(
+                        &SectionHandle,
+                        SECTION_ALL_ACCESS,
+                        &ObjectAttributes,
+                        &MaximumSize,
+                        PAGE_READWRITE,
+                        SEC_COMMIT,
+                        nullptr
+                    );
+            if (NT_FAILED(Status))
+            {
+                NtClose(RootHandle);
+                return nullptr;
+            }
+        }
+        else
+        {
+            NtClose(RootHandle);
+            Status = LeOpenDirectoryObject(&RootHandle, L"\\Sandbox", nullptr);
+            if (NT_FAILED(Status))
+                return FALSE;
+            if (!LeFindSectionObject(&SectionHandle, &SectionName, 6, RootHandle))
+            {
+                NtClose(RootHandle);
+                return nullptr;
+            }
+        }
+    }
+    NtClose(RootHandle);
 
     ViewSize = 0;
     LePeb = nullptr;
@@ -346,7 +448,7 @@ OpenOrCreateLePeb(
     return LePeb;
 }
 
-#define ENABLE_LOG 1
+#define ENABLE_LOG 0
 
 #if ENABLE_LOG
 
@@ -355,14 +457,39 @@ inline VOID InitLog(NtFileDisk &LogFile)
     WCHAR LogFilePath[MAX_NTPATH];
     UNICODE_STRING SelfPath;
     PLDR_MODULE Self, Target;
+    PLEPEB LePeb = nullptr;
 
     Target = FindLdrModuleByHandle(nullptr);
     Self = FindLdrModuleByHandle(&__ImageBase);
 
-    SelfPath = Self->FullDllName;
-    SelfPath.Length -= Self->BaseDllName.Length;
+    if (!Target)
+    {
+        LogFile = 0;
+        return;
+    }
+
+    if (Self)
+    {
+        SelfPath = Self->FullDllName;
+        SelfPath.Length -= Self->BaseDllName.Length;
+    }
+    else
+    {
+        LePeb = OpenOrCreateLePeb();
+        if (LePeb == nullptr)
+        {
+            LogFile = 0;
+            return;
+        }
+        RtlInitUnicodeString(&SelfPath, LePeb->LeDllDirPath);
+    }
 
     swprintf(LogFilePath, L"%wZ\\%wZ.%p.log.txt", &SelfPath, &Target->BaseDllName, CurrentPid());
+
+    if (LePeb != nullptr)
+    {
+        CloseLePeb(LePeb);
+    }
 
     ULONG BOM = BOM_UTF16_LE;
     LogFile.Create(LogFilePath);
