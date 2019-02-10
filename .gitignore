@@ -27,3 +27,5 @@ _ReSharper*/
 $tf*/
 *.sdf
 *.opt
+*.swp/
+**/*.swp

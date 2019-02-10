@@ -207,6 +207,12 @@ LeCreateProcess(
 
 	ULONG_PTR Length = (StrLengthW(DllFullPath) + 1) * sizeof(WCHAR);
 	CopyMemory(LePeb->LeDllFullPath, DllFullPath, ML_MIN(Length, sizeof(LePeb->LeDllFullPath)));
+
+  Length = Module->FullDllName.Length + sizeof(WCHAR) - Module->BaseDllName.Length;
+
+  Length = ML_MIN(Length, sizeof(LePeb->LeDllFullPath));
+  CopyMemory(LePeb->LeDllDirPath, Module->FullDllName.Buffer, Length);
+  LePeb->LeDllDirPath[Length / sizeof(WCHAR) - 1] = 0;
 	}
 
 	UNICODE_STRING DllFullPathString;

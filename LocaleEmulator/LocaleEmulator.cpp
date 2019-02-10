@@ -151,13 +151,21 @@ NTSTATUS LeGlobalData::Initialize()
             WCHAR           DefaultACP[0x20], DefaultOEMCP[0x20], DefaultLCID[0x20];
             PVOID           ReloadedNtdll;
             PUNICODE_STRING FullDllName;
+            PLDR_MODULE     Ledll;
 
             LePeb = GetLePeb();
 
             InitDefaultLeb(&LePeb->Leb);
 
-            FullDllName = &FindLdrModuleByHandle(&__ImageBase)->FullDllName;
-            CopyMemory(LePeb->LeDllFullPath, FullDllName->Buffer, FullDllName->Length + sizeof(WCHAR));
+            Ledll = FindLdrModuleByHandle(&__ImageBase);
+            if (Ledll)
+            {
+                FullDllName = &Ledll->FullDllName;
+                CopyMemory(LePeb->LeDllFullPath, FullDllName->Buffer, FullDllName->Length + sizeof(WCHAR));
+                CopyMemory(LePeb->LeDllDirPath, FullDllName->Buffer,
+                    FullDllName->Length + sizeof(WCHAR) - Ledll->BaseDllName.Length);
+                LePeb->LeDllDirPath[(FullDllName->Length - Ledll->BaseDllName.Length) / sizeof(WCHAR)] = 0;
+            }
 
             Status = LoadPeImage(Ntdll->FullDllName.Buffer, &ReloadedNtdll, nullptr, LOAD_PE_IGNORE_RELOC);
             if (NT_SUCCESS(Status))
@@ -328,8 +336,10 @@ NTSTATUS LeGlobalData::Initialize()
     Kernel32Ldr = GetKernel32Ldr();
     if (Kernel32Ldr != nullptr)
     {
-        Kernel32Ldr->EntryPoint = DelayInitDllEntry;
-        // HookKernel32Routines(Kernel32Ldr->DllBase);
+        if (FLAG_ON(Kernel32Ldr->Flags, LDRP_PROCESS_ATTACH_CALLED))
+            HookKernel32Routines(Kernel32Ldr->DllBase);
+        else
+            Kernel32Ldr->EntryPoint = DelayInitDllEntry;
     }
 
     WriteLog(L"init %p", Status);
