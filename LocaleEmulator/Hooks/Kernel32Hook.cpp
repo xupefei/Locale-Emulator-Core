@@ -123,6 +123,96 @@ NTSTATUS LeGlobalData::HackUserDefaultLCID2(PVOID Kernel32)
     return STATUS_SUCCESS;
 }
 
+void* GetFirstCallTarget(void* start_offset, DWORD parse_range, void **next) {
+    void* res = nullptr;
+    WalkOpCodeT(start_offset, parse_range,
+        WalkOpCodeM(Buffer, OpLength, Ret)
+    {
+        if (Buffer[0] != CALL) {
+            return STATUS_NOT_FOUND;
+        }
+
+        res = GetCallDestination(Buffer);
+        *next = &Buffer[OpLength];
+        return STATUS_SUCCESS;
+    }
+    );
+    return res;
+}
+
+void* GetKthCallTarget(void* start_offset, DWORD parse_range_each, int K) {
+    if (start_offset == nullptr)
+        return nullptr;
+    void *next, *res;
+    while (K >= 1) {
+        res = GetFirstCallTarget(start_offset, parse_range_each, &next);
+        if (res == nullptr)
+            return nullptr;
+        start_offset = next;
+        --K;
+    }
+    return res;
+}
+
+typedef DWORD(__stdcall* pSetupAnsiOemCodeHashNodes)();
+
+NTSTATUS LeSetupAnsiOemCodeHashNodes() {
+    PLDR_MODULE Kernel = FindLdrModuleByName(&USTR(L"KERNELBASE.dll"));
+    if (Kernel == nullptr)
+        return STATUS_PROCEDURE_NOT_FOUND;
+
+    void* pKernelBaseDllInitialize = GetKthCallTarget(Kernel->EntryPoint, 0x30, 1);
+    if (pKernelBaseDllInitialize == nullptr)
+        return STATUS_PROCEDURE_NOT_FOUND;
+
+    void* pKernelBaseBaseDllInitialize = GetKthCallTarget(pKernelBaseDllInitialize, 0x20, 2);
+    if (pKernelBaseBaseDllInitialize == nullptr)
+        return STATUS_PROCEDURE_NOT_FOUND;
+
+    //AllocConsole();
+    //PrintConsoleW(L"pKernelBaseDllInitialize = %p\npKernelBaseBaseDllInitialize: %p\n", pKernelBaseDllInitialize, pKernelBaseBaseDllInitialize);
+
+    void* pBaseNlsDllInitialize = nullptr;
+    void* _;
+    WalkOpCodeT(pKernelBaseBaseDllInitialize, 0x400,
+        WalkOpCodeM(Buffer, OpLength, Ret)
+    {
+        if (Buffer[0] != 0xB8 || *((DWORD*)&Buffer[1]) != 0x190) {
+            // locate first `mov eax, 0x190`
+            return STATUS_NOT_FOUND;
+        }
+        _ = Buffer;
+        pBaseNlsDllInitialize = GetKthCallTarget(_, 0x20, 1);
+        return STATUS_SUCCESS;
+    }
+    );
+    if (pBaseNlsDllInitialize == nullptr)
+        return STATUS_PROCEDURE_NOT_FOUND;
+
+    void* pNlsProcessInitialize = GetKthCallTarget(pBaseNlsDllInitialize, 0x30, 1);
+    if (pNlsProcessInitialize == nullptr)
+        return STATUS_PROCEDURE_NOT_FOUND;
+
+    auto the_func = (pSetupAnsiOemCodeHashNodes)GetKthCallTarget(pNlsProcessInitialize, 0x30, 3);
+    if (the_func == nullptr)
+        return STATUS_PROCEDURE_NOT_FOUND;
+
+    //AllocConsole();
+    //PrintConsoleW(L"SetupAnsiOemCodeHashNodes: %p\n", the_func);
+
+    the_func();
+}
+
+NTSTATUS LeGlobalData::HackAnsiOemCodeHashNodes() {
+    PLeGlobalData GlobalData = LeGetGlobalData();
+
+    unsigned char* pTeb = (unsigned char*)(__readfsdword(48));
+    *(short*)(pTeb + 0x228) = GlobalData->GetLeb()->AnsiCodePage;
+    *(short*)(pTeb + 0x22a) = GlobalData->GetLeb()->OemCodePage;
+
+    return LeSetupAnsiOemCodeHashNodes();
+}
+
 NTSTATUS LeGlobalData::HookKernel32Routines(PVOID Kernel32)
 {
     PVOID GetCurrentNlsCache;
@@ -130,7 +220,10 @@ NTSTATUS LeGlobalData::HookKernel32Routines(PVOID Kernel32)
 
     Status = this->HackUserDefaultLCID2(Kernel32);
 
-    WriteLog(L"hook k32: %p", Status);
+    Status = this->HackAnsiOemCodeHashNodes();
+
+    //AllocConsole();
+    //PrintConsoleW(L"hook k32: %p", Status);
 
     return Status;
 }

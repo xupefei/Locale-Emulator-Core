@@ -523,9 +523,11 @@ protected:
     ml::GrowableArray<REGISTRY_REDIRECTION_ENTRY> RegistryRedirectionEntry;
     ml::HashTableT<TEXT_METRIC_INTERNAL> TextMetricCache;
 
+public:
     PVOID CodePageMapView;
     ULONG_PTR AnsiCodePageOffset, OemCodePageOffset, UnicodeCaseTableOffset;
 
+protected:
     PVOID DllNotificationCookie;
 
     UNICODE_STRING SystemDirectory;
@@ -544,6 +546,7 @@ public:
         API_POINTER(RtlKnownExceptionFilter)    StubRtlKnownExceptionFilter;
         API_POINTER(NtContinue)                 StubLdrInitNtContinue;
         API_POINTER(LdrResSearchResource)       StubLdrResSearchResource;
+        API_POINTER(RtlCustomCPToUnicodeN)      StubRtlCustomCPToUnicodeN;
 
         API_POINTER(NtUserMessageCall)          StubNtUserMessageCall;
         API_POINTER(NtUserDefSetText)           StubNtUserDefSetText;
@@ -587,12 +590,15 @@ public:
             RtlFreeUnicodeString(&Ntdll.CodePageKey);
             RtlFreeUnicodeString(&Ntdll.LanguageKey);
             RtlDeleteCriticalSection(&Gdi32.GdiLock);
+            RtlDeleteCriticalSection(&Ntdll.NtLock);
         }
 
         struct
         {
             UNICODE_STRING CodePageKey;
             UNICODE_STRING LanguageKey;
+
+            RTL_CRITICAL_SECTION NtLock;
 
         } Ntdll;
 
@@ -702,6 +708,7 @@ public:
 
     NTSTATUS HackUserDefaultLCID(PVOID Kernel32);
     NTSTATUS HackUserDefaultLCID2(PVOID Kernel32);
+    NTSTATUS HackAnsiOemCodeHashNodes();
     NTSTATUS InjectSelfToChildProcess(HANDLE Process, PCLIENT_ID Cid);
 
     /************************************************************************

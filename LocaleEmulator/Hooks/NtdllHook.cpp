@@ -872,6 +872,27 @@ LONG NTAPI LeKnownExceptionFilter(PEXCEPTION_POINTERS ExceptionPointers)
     return Result;
 }
 
+NTSTATUS NTAPI LeCustomCPToUnicodeN(IN PCPTABLEINFO CustomCP,
+    OUT PWCHAR UnicodeString,
+    IN ULONG UnicodeSize,
+    OUT PULONG ResultSize OPTIONAL,
+    IN PCHAR CustomString,
+    IN ULONG CustomSize) {
+    PLeGlobalData GlobalData = LeGetGlobalData();
+
+    if (CustomCP->CodePage != 65001 && CustomCP->CodePage != GlobalData->GetLeb()->AnsiCodePage) {
+        PROTECT_SECTION(&GlobalData->HookRoutineData.Ntdll.NtLock) {
+            if (CustomCP->CodePage != 65001 && CustomCP->CodePage != GlobalData->GetLeb()->AnsiCodePage) {
+                RtlInitCodePageTable((PUSHORT)PtrAdd(GlobalData->CodePageMapView,
+                    GlobalData->AnsiCodePageOffset), CustomCP);
+            }
+        }
+    }
+
+    return GlobalData->HookStub.StubRtlCustomCPToUnicodeN(CustomCP, UnicodeString,
+        UnicodeSize, ResultSize, CustomString, CustomSize); 
+}
+
 NTSTATUS LeGlobalData::HookNtdllRoutines(PVOID Ntdll)
 {
     NTSTATUS            Status;
@@ -912,9 +933,12 @@ NTSTATUS LeGlobalData::HookNtdllRoutines(PVOID Ntdll)
     {
         Mp::FunctionCallVa(LdrInitNtContinue, LeLdrInitNtContinue, &HookStub.StubLdrInitNtContinue),
         Mp::FunctionJumpVa(::RtlKnownExceptionFilter, LeKnownExceptionFilter, &HookStub.StubRtlKnownExceptionFilter),
+        Mp::FunctionJumpVa(::RtlCustomCPToUnicodeN, LeCustomCPToUnicodeN, &HookStub.StubRtlCustomCPToUnicodeN),
     };
 
     Mp::PatchMemory(p, countof(p));
+
+    RtlInitializeCriticalSectionAndSpinCount(&HookRoutineData.Ntdll.NtLock, 4000);
 
     return STATUS_SUCCESS;
 }

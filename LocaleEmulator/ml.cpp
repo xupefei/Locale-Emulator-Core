@@ -6964,9 +6964,9 @@ CreateFileInternalWithFullPath(
 */
     InitializeObjectAttributes(&ObjectAttributes, FileName, OBJ_CASE_INSENSITIVE, nullptr, nullptr);
 
-    API_POINTER(ZwCreateFile) XCreateFile;
+    static API_POINTER(ZwCreateFile) XCreateFile;
 
-#if ML_KERNEL_MODE
+/*#if ML_KERNEL_MODE
 
     XCreateFile = ZwCreateFile;
 
@@ -6974,7 +6974,14 @@ CreateFileInternalWithFullPath(
 
     XCreateFile = NtCreateFile;
 
-#endif
+#endif*/
+
+    if (XCreateFile == nullptr) {
+
+        PLDR_MODULE Nt = FindLdrModuleByName(&USTR(L"ntdll.dll"));
+
+        XCreateFile = (API_POINTER(ZwCreateFile))LookupExportTable(Nt->DllBase, NTDLL_NtCreateFile);
+    }
 
     Status = XCreateFile(
                 FileHandle,

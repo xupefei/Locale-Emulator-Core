@@ -2,6 +2,75 @@
 
 ULONG (NTAPI *GdiGetCodePage)(HDC NewDC);
 
+HFONT
+NTAPI
+LeNtGdiHfontCreate(
+    PENUMLOGFONTEXDVW   EnumLogFont,
+    ULONG               SizeOfEnumLogFont,
+    LONG                LogFontType,
+    LONG                Unknown,
+    PVOID               FreeListLocalFont
+);
+
+HFONT
+WINAPI
+LeCreateFontIndirectExW(const ENUMLOGFONTEXDVW* elfexd)
+{
+    /* Msdn: Note, this function ignores the elfDesignVector member in
+             ENUMLOGFONTEXDV.
+     */
+    if (elfexd)
+    {
+        PLeGlobalData       GlobalData = LeGetGlobalData();
+        //return GlobalData->HookStub.StubNtGdiHfontCreate((PENUMLOGFONTEXDVW)elfexd, 0, 0, 0, NULL);
+        return LeNtGdiHfontCreate((PENUMLOGFONTEXDVW)elfexd, 0, 0, 0, NULL);
+    }
+    else return NULL;
+}
+
+HFONT
+WINAPI
+LeCreateFontIndirectW(
+    CONST LOGFONTW* lplf
+)
+{
+#if 0
+    static BOOL bDidTest = FALSE;
+    if (!bDidTest)
+    {
+        bDidTest = TRUE;
+        DoFontSystemUnittest();
+    }
+#endif
+    if (lplf)
+    {
+        ENUMLOGFONTEXDVW Logfont;
+
+        RtlCopyMemory(&Logfont.elfEnumLogfontEx.elfLogFont, lplf, sizeof(LOGFONTW));
+        // Need something other than just cleaning memory here.
+        // Guess? Use caller data to determine the rest.
+        RtlZeroMemory(&Logfont.elfEnumLogfontEx.elfFullName,
+            sizeof(Logfont.elfEnumLogfontEx.elfFullName));
+        RtlZeroMemory(&Logfont.elfEnumLogfontEx.elfStyle,
+            sizeof(Logfont.elfEnumLogfontEx.elfStyle));
+        RtlZeroMemory(&Logfont.elfEnumLogfontEx.elfScript,
+            sizeof(Logfont.elfEnumLogfontEx.elfScript));
+
+        Logfont.elfDesignVector.dvNumAxes = 0; // No more than MM_MAX_NUMAXES
+
+        RtlZeroMemory(&Logfont.elfDesignVector, sizeof(DESIGNVECTOR));
+
+        /*if (Logfont.elfEnumLogfontEx.elfLogFont.lfCharSet == CP_ACP) {
+            PLeGlobalData       GlobalData = LeGetGlobalData();
+            Logfont.elfEnumLogfontEx.elfLogFont.lfCharSet = GlobalData->GetLeb()->AnsiCodePage;
+        }*/
+
+        return LeCreateFontIndirectExW(&Logfont);
+    }
+    else return NULL;
+}
+
+
 HFONT GetFontFromFont(PLeGlobalData GlobalData, HFONT Font)
 {
     LOGFONTW LogFont;
@@ -10,7 +79,7 @@ HFONT GetFontFromFont(PLeGlobalData GlobalData, HFONT Font)
         return nullptr;
 
     LogFont.lfCharSet = GlobalData->GetLeb()->DefaultCharset;
-    Font = CreateFontIndirectW(&LogFont);
+    Font = LeCreateFontIndirectW(&LogFont);
 
     return Font;
 }
@@ -727,9 +796,9 @@ LeNtGdiHfontCreate(
         enumlfex->elfEnumLogfontEx.elfLogFont.lfCharSet = GlobalData->GetLeb()->DefaultCharset;
 
         //if (GdiGetCodePage == NULL)
-        //CopyStruct(enumlfex.elfEnumLogfontEx.elfLogFont.lfFaceName, GlobalData->GetLeb()->DefaultFaceName, LF_FACESIZE);
+        //CopyStruct(enumlfex->elfEnumLogfontEx.elfLogFont.lfFaceName, GlobalData->GetLeb()->DefaultFaceName, LF_FACESIZE);
         //AllocConsole();
-        //PrintConsoleW(L"%s\n", enumlfex.elfEnumLogfontEx.elfLogFont.lfFaceName);
+        //PrintConsoleW(L"%d=>%d %s\n", Charset, enumlfex->elfEnumLogfontEx.elfLogFont.lfCharSet, enumlfex->elfEnumLogfontEx.elfLogFont.lfFaceName);
 
         EnumLogFont = enumlfex;
     }
