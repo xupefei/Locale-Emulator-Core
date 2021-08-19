@@ -608,7 +608,8 @@ public:
 
         struct
         {
-            BOOLEAN StockObjectInitialized : 1;
+            // maybe set up a flag for each kind of object?
+            //BOOLEAN StockObjectInitialized : 1;
 
             RTL_CRITICAL_SECTION GdiLock;
 
