@@ -1,4 +1,5 @@
 #include "stdafx.h"
+#include <algorithm>
 
 ULONG (NTAPI *GdiGetCodePage)(HDC NewDC);
 
@@ -129,11 +130,8 @@ VOID LeGlobalData::AddTextMetricToCache(LPENUMLOGFONTEXW LogFont, PTEXT_METRIC_I
 
 HGDIOBJ NTAPI LeGetStockObject(LONG Object)
 {
-    HGDIOBJ         StockObject;
     PULONG_PTR      Index;
     PLeGlobalData   GlobalData = LeGetGlobalData();
-
-    StockObject = nullptr;
 
     static ULONG_PTR StockObjectIndex[] =
     {
@@ -146,7 +144,7 @@ HGDIOBJ NTAPI LeGetStockObject(LONG Object)
         SYSTEM_FIXED_FONT,
     };
 
-    if (!GlobalData->HookRoutineData.Gdi32.StockObjectInitialized)
+    /*if (!GlobalData->HookRoutineData.Gdi32.StockObjectInitialized)
     {
         PROTECT_SECTION(&GlobalData->HookRoutineData.Gdi32.GdiLock)
         {
@@ -160,17 +158,27 @@ HGDIOBJ NTAPI LeGetStockObject(LONG Object)
 
             GlobalData->HookRoutineData.Gdi32.StockObjectInitialized = TRUE;
         }
-    }
+    }*/
 
     LOOP_ONCE
     {
-        if (Object > countof(GlobalData->HookRoutineData.Gdi32.StockObject))
+        if (Object >= countof(GlobalData->HookRoutineData.Gdi32.StockObject))
             break;
 
-        StockObject = GlobalData->HookRoutineData.Gdi32.StockObject[Object];
+        auto& StockObject = GlobalData->HookRoutineData.Gdi32.StockObject[Object];
 
         if (StockObject != nullptr)
             return StockObject;
+
+        auto StockObjectIndexLast = StockObjectIndex + countof(StockObjectIndex);
+
+        if (std::find(StockObjectIndex, StockObjectIndexLast, Object) != StockObjectIndexLast) {
+            PROTECT_SECTION(&GlobalData->HookRoutineData.Gdi32.GdiLock) {
+                if (StockObject == nullptr)
+                    return StockObject = GetFontFromFont(GlobalData, (HFONT)GlobalData->GetStockObject(Object));
+                return StockObject;
+            }
+        }
     }
 
     return GlobalData->GetStockObject(Object);
@@ -181,7 +189,8 @@ BOOL NTAPI LeDeleteObject(HGDIOBJ GdiObject)
     HGDIOBJ*        StockObject;
     PLeGlobalData   GlobalData = LeGetGlobalData();
 
-    if (GdiObject == nullptr || GlobalData->HookRoutineData.Gdi32.StockObjectInitialized == FALSE)
+    //if (GdiObject == nullptr || GlobalData->HookRoutineData.Gdi32.StockObjectInitialized == FALSE)
+    if (GdiObject == nullptr)
         return TRUE;
 
     FOR_EACH_ARRAY(StockObject, GlobalData->HookRoutineData.Gdi32.StockObject)
@@ -727,7 +736,7 @@ LeNtGdiHfontCreate(
         enumlfex->elfEnumLogfontEx.elfLogFont.lfCharSet = GlobalData->GetLeb()->DefaultCharset;
 
         //if (GdiGetCodePage == NULL)
-        //CopyStruct(enumlfex.elfEnumLogfontEx.elfLogFont.lfFaceName, GlobalData->GetLeb()->DefaultFaceName, LF_FACESIZE);
+        //CopyStruct(enumlfex->elfEnumLogfontEx.elfLogFont.lfFaceName, GlobalData->GetLeb()->DefaultFaceName, LF_FACESIZE);
         //AllocConsole();
         //PrintConsoleW(L"%s\n", enumlfex.elfEnumLogfontEx.elfLogFont.lfFaceName);
 
