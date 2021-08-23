@@ -141,9 +141,10 @@ void* GetFirstCallTarget(void* start_offset, DWORD parse_range, void **next) {
 }
 
 void* GetKthCallTarget(void* start_offset, DWORD parse_range_each, int K) {
+// returns nullptr if K == 0
     if (start_offset == nullptr)
         return nullptr;
-    void *next, *res;
+    void *next, *res = nullptr;
     while (K >= 1) {
         res = GetFirstCallTarget(start_offset, parse_range_each, &next);
         if (res == nullptr)
@@ -165,12 +166,13 @@ NTSTATUS LeSetupAnsiOemCodeHashNodes() {
     if (pKernelBaseDllInitialize == nullptr)
         return STATUS_PROCEDURE_NOT_FOUND;
 
+    WriteLog(L"KernelBaseDllInitialize: %p\n", pKernelBaseDllInitialize);
+
     void* pKernelBaseBaseDllInitialize = GetKthCallTarget(pKernelBaseDllInitialize, 0x20, 2);
     if (pKernelBaseBaseDllInitialize == nullptr)
         return STATUS_PROCEDURE_NOT_FOUND;
 
-    //AllocConsole();
-    //PrintConsoleW(L"pKernelBaseDllInitialize = %p\npKernelBaseBaseDllInitialize: %p\n", pKernelBaseDllInitialize, pKernelBaseBaseDllInitialize);
+    WriteLog(L"KernelBaseBaseDllInitialize: %p\n", pKernelBaseBaseDllInitialize);
 
     void* pBaseNlsDllInitialize = nullptr;
     void* _;
@@ -189,16 +191,19 @@ NTSTATUS LeSetupAnsiOemCodeHashNodes() {
     if (pBaseNlsDllInitialize == nullptr)
         return STATUS_PROCEDURE_NOT_FOUND;
 
+    WriteLog(L"BaseNlsDllInitialize: %p\n", pBaseNlsDllInitialize);
+
     void* pNlsProcessInitialize = GetKthCallTarget(pBaseNlsDllInitialize, 0x30, 1);
     if (pNlsProcessInitialize == nullptr)
         return STATUS_PROCEDURE_NOT_FOUND;
+
+    WriteLog(L"NlsProcessInitialize: %p\n", pNlsProcessInitialize);
 
     auto the_func = (pSetupAnsiOemCodeHashNodes)GetKthCallTarget(pNlsProcessInitialize, 0x30, 3);
     if (the_func == nullptr)
         return STATUS_PROCEDURE_NOT_FOUND;
 
-    //AllocConsole();
-    //PrintConsoleW(L"SetupAnsiOemCodeHashNodes: %p\n", the_func);
+    WriteLog(L"SetupAnsiOemCodeHashNodes: %p\n", the_func);
 
     the_func();
 }
@@ -222,8 +227,7 @@ NTSTATUS LeGlobalData::HookKernel32Routines(PVOID Kernel32)
 
     Status = this->HackAnsiOemCodeHashNodes();
 
-    //AllocConsole();
-    //PrintConsoleW(L"hook k32: %p", Status);
+    WriteLog(L"hook k32: %p", Status);
 
     return Status;
 }

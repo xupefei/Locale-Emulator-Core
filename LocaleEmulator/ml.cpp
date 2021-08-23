@@ -6966,16 +6966,6 @@ CreateFileInternalWithFullPath(
 
     static API_POINTER(ZwCreateFile) XCreateFile;
 
-/*#if ML_KERNEL_MODE
-
-    XCreateFile = ZwCreateFile;
-
-#else
-
-    XCreateFile = NtCreateFile;
-
-#endif*/
-
     if (XCreateFile == nullptr) {
 
         PLDR_MODULE Nt = FindLdrModuleByName(&USTR(L"ntdll.dll"));
