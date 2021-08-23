@@ -158,6 +158,17 @@ void* GetKthCallTarget(void* start_offset, DWORD parse_range_each, int K) {
 typedef DWORD(__stdcall* pSetupAnsiOemCodeHashNodes)();
 
 NTSTATUS LeSetupAnsiOemCodeHashNodes() {
+
+    RTL_OSVERSIONINFOW osvi;
+
+    ZeroMemory(&osvi, sizeof(RTL_OSVERSIONINFOW));
+    osvi.dwOSVersionInfoSize = sizeof(RTL_OSVERSIONINFOW);
+
+    RtlGetVersion(&osvi);
+    if (osvi.dwMajorVersion < 10 || osvi.dwBuildNumber < 19042)
+        return STATUS_SUCCESS; // does not need this trick for older versions.
+
+
     PLDR_MODULE Kernel = FindLdrModuleByName(&USTR(L"KERNELBASE.dll"));
     if (Kernel == nullptr)
         return STATUS_PROCEDURE_NOT_FOUND;
